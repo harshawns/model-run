@@ -1,8 +1,8 @@
 # Larger-Model GPU Bundle
 
-This folder is a runnable wrapper bundle for launching the current
-competition-compliant OpenEnv V1 GRPO pipeline on a GPU machine with vLLM,
-with a hardware-specific default profile for one AWS `p5.4xlarge`
+This folder is a runnable wrapper bundle for launching the competition-compliant
+OpenEnv GRPO pipeline (episode mode) on a GPU machine with vLLM, with a
+hardware-specific default profile for one AWS `p5.4xlarge`
 (`1x H100`, `80 GB HBM3`).
 
 It now includes copied source snapshots of the modified forks inside this
@@ -28,11 +28,13 @@ The larger-model run uses the copied PT snapshot in
 [grpo_train.py](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/ReasoningEconomicsPT/training/grpo_train.py),
 not the upstream trainer. Important changes already in that file:
 
-- flat OpenEnv `reward_funcs` instead of TRL `environment_factory`
+- `--openenv_mode {flat,episode}` — flat V1 and multi-question episode mode
+- episode rollout via TRL `rollout_func` with `env_mask` tracking
+- extended JSONL reward log with `termination_reason`, `episode_clipped`, step-level token diagnostics
+- flat OpenEnv `reward_funcs` path (V1 fallback)
 - deterministic seed replay via `env_seed`
 - local-cache-friendly tokenizer loading
 - LoRA-capable GRPO path
-- `max_completion_length=384` as the current best baseline default
 - seed-manifest filtering support:
   - `--seed_manifest_path`
   - `--seed_bucket`
@@ -41,6 +43,7 @@ The bundle also uses:
 
 - [scout_openenv_seeds.py](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/ReasoningEconomicsPT/training/scout_openenv_seeds.py)
 - [run_grpo_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/ReasoningEconomicsPT/scripts/run_grpo_lambda.sh)
+- [summarize_episode_run.py](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/ReasoningEconomicsPT/scripts/summarize_episode_run.py)
 - [bootstrap_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/ReasoningEconomicsPT/scripts/bootstrap_lambda.sh)
 - [preflight_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/ReasoningEconomicsPT/scripts/preflight_lambda.sh)
 
@@ -76,11 +79,14 @@ This profile defaults to:
 - `REPT_TORCH_DTYPE=bfloat16`
 - `REPT_NUM_GENERATIONS=4`
 - `REPT_BATCH_SIZE=4`
+- `REPT_OPENENV_MODE=episode`
 - `REPT_VLLM_MODE=colocate`
 - `REPT_VLLM_GPU_MEMORY_UTILIZATION=0.25`
-- `REPT_MAX_COMPLETION_LENGTH=384`
+- `REPT_MAX_COMPLETION_LENGTH=1024`
+- `REASON_BUDGET_NUM_QUESTIONS=4`
 
-This is the largest reasonable default for the current single-GPU setup.
+This profile is tuned for first H100 episode-mode validation with `Qwen/Qwen3-1.7B`
+before scaling to `Qwen/Qwen3-14B`.
 
 ### Kept for reference only: `Qwen/Qwen3-32B`
 
@@ -130,19 +136,20 @@ The default wrapper profile in [_common.sh](/Users/harshawnsingh/Desktop/csci-54
 - `REPT_VLLM_MODE=colocate`
 - `REPT_VLLM_GPU_MEMORY_UTILIZATION=0.25`
 - `REPT_VLLM_TENSOR_PARALLEL_SIZE=1`
-- `REPT_MAX_COMPLETION_LENGTH=384`
+- `REPT_OPENENV_MODE=episode`
+- `REPT_MAX_COMPLETION_LENGTH=1024`
 - `REPT_USE_VLLM=1`
 - `ENV_BASE_URL=http://127.0.0.1:8010`
-- `REASON_BUDGET_NUM_QUESTIONS=1`
+- `REASON_BUDGET_NUM_QUESTIONS=4`
 
 These defaults are deliberate:
 
 1. `batch_size` must be divisible by `num_generations` for GRPO.
-2. `384` is the current best validated completion-length default.
-3. all-50 prompts is still the best local baseline shape; pure mixed-only
-   filtering did not beat the all-50 run on local MPS.
-4. `num_generations=4` is the main next lever for GPU training.
-5. `bfloat16` is required for a realistic single-H100 larger-model run.
+2. `episode` mode is the validated multi-question path. Use `flat` only for V1 baseline comparisons.
+3. `1024` is the validated local starting point for 4-question episodes. GPU runs may need 1280–1536 depending on vLLM pressure.
+4. all-50 prompts is still the best local baseline shape; pure mixed-only filtering did not beat the all-50 run on local MPS.
+5. `num_generations=4` is the main next lever for GPU training.
+6. `bfloat16` is required for a realistic single-H100 larger-model run.
 
 ## Important Constraint
 
@@ -248,7 +255,7 @@ Defaults:
 - `ENV_VENV` defaults to `$ENV_ROOT/.venv-server`
 - host defaults to `127.0.0.1`
 - port defaults to `8010`
-- `REASON_BUDGET_NUM_QUESTIONS=1`
+- `REASON_BUDGET_NUM_QUESTIONS=4`
 
 If your env fork or venv lives somewhere else, export:
 
@@ -372,6 +379,61 @@ Expected training outputs include:
 - tokenizer files
 - model artifacts
 - reward logs when enabled
+
+## Episode Mode Status
+
+- Multi-question episode mode is validated locally (4-question, CPU, Qwen3-0.6B).
+- Full 4-question episodes complete end-to-end: `termination_reason=env_done`, `episode_clipped=False`, `final_questions_remaining=0`.
+- `max_completion_length=1024` is the validated local starting point for 4-question episodes with the compact observation prompt. This is not a proven minimum — GPU runs may need more.
+- Episode-mode eval parity is available: every run produces `reward_log.jsonl`. Summarize with `scripts/summarize_episode_run.py`.
+- GPU/vLLM validation on H100 is the next remaining step.
+
+## GPU Sequence Length Tuning
+
+Local CPU validation confirmed `max_completion_length=1024` works for 4-question episodes.
+GPU/vLLM runs may need more headroom because:
+- Answers are longer without a per-step token cap
+- vLLM KV-cache pressure under colocate mode adds constraints
+
+Tuning grid (start low, raise if episodes clip or `termination_reason=suffix_too_large` appears):
+- `1024` — validated local starting point
+- `1280`
+- `1536`
+
+Set `REPT_MAX_COMPLETION_LENGTH` to control. Use `scripts/summarize_episode_run.py` to check
+`clipped_rate` and `termination_reasons` after each candidate.
+
+> **Memory note:** Local success at 1024 does not guarantee H100 memory safety. vLLM colocate mode
+> dominates memory. If OOM, tune `REPT_VLLM_GPU_MEMORY_UTILIZATION` before raising sequence length.
+
+## First H100 Episode Smoke (Recommended Starting Point)
+
+Use `Qwen/Qwen3-1.7B` for the first smoke — not `Qwen/Qwen3-14B`. Validate the episode path is
+stable before scaling up.
+
+```bash
+# 1. Start env (4-question mode — default after this sync)
+source ./p5_4xlarge_h100.lambda.env
+bash start_openenv_server.sh
+
+# 2. Run episode smoke
+export REPT_MODEL=Qwen/Qwen3-1.7B
+export REPT_OPENENV_MODE=episode
+export REPT_NUM_GENERATIONS=4
+export REPT_BATCH_SIZE=4
+export REPT_GRAD_ACCUM=4
+export REPT_MAX_COMPLETION_LENGTH=1024   # raise to 1280 if episodes clip
+bash run_p5_4xlarge_h100_lambda.sh
+
+# 3. Summarize results
+python ReasoningEconomicsPT/scripts/summarize_episode_run.py \
+    "$REPT_OUTPUT_DIR/reward_log.jsonl"
+```
+
+Success criteria: `completion_rate=100%`, `termination_reasons={'env_done': N}`, `clipped_rate=0%`,
+non-zero `reward_std`.
+
+`Qwen/Qwen3-14B` is the eventual larger-model target, not the first smoke.
 
 ## Troubleshooting
 

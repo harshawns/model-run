@@ -26,6 +26,7 @@ usage() {
     echo "  REPT_FS_NAME          Lambda filesystem name (used when REPT_DATA_ROOT unset)"
     echo "  REPT_DATA_ROOT        Base data path (default: /lambda/nfs/<fs>/rept or /lambda/nfs/rept)"
     echo "  REPT_MODEL            default: Qwen/Qwen3-1.7B"
+    echo "  REPT_OPENENV_MODE     default: flat (use episode for multi-question rollouts)"
     echo "  REPT_OUTPUT_DIR       default: <DATA_ROOT>/runs/grpo_train_lambda"
     echo "  REPT_NUM_EPOCHS       default: 1"
     echo "  REPT_NUM_GENERATIONS  default: 4"
@@ -44,6 +45,7 @@ usage() {
     echo "  PYTORCH_WHEEL_INDEX       optional pip extra index URL"
     echo "  REPT_N_PROMPTS            default: 200 (questions pre-fetched from OpenEnv)"
     echo "  REPT_MAX_COMPLETION_LENGTH  default: 384 (tokens per model response)"
+    echo "  REPT_REWARD_LOG_PATH      default: <REPT_OUTPUT_DIR>/reward_log.jsonl"
     echo "  REPT_USE_VLLM             default: 1 (set to 0 to disable vLLM generation)"
     exit 1
 }
@@ -69,6 +71,7 @@ else
 fi
 
 REPT_MODEL="${REPT_MODEL:-Qwen/Qwen3-1.7B}"
+REPT_OPENENV_MODE="${REPT_OPENENV_MODE:-flat}"
 REPT_OUTPUT_DIR="${REPT_OUTPUT_DIR:-${DATA_ROOT}/runs/grpo_train_lambda}"
 REPT_NUM_EPOCHS="${REPT_NUM_EPOCHS:-1}"
 REPT_NUM_GENERATIONS="${REPT_NUM_GENERATIONS:-4}"
@@ -88,6 +91,17 @@ PYTORCH_WHEEL_INDEX="${PYTORCH_WHEEL_INDEX:-}"
 REPT_N_PROMPTS="${REPT_N_PROMPTS:-200}"
 REPT_MAX_COMPLETION_LENGTH="${REPT_MAX_COMPLETION_LENGTH:-384}"
 REPT_USE_VLLM="${REPT_USE_VLLM:-1}"
+REPT_REWARD_LOG_PATH="${REPT_REWARD_LOG_PATH:-$REPT_OUTPUT_DIR/reward_log.jsonl}"
+
+if (( REPT_BATCH_SIZE % REPT_NUM_GENERATIONS != 0 )); then
+    echo "[ERROR] REPT_BATCH_SIZE ($REPT_BATCH_SIZE) must be divisible by REPT_NUM_GENERATIONS ($REPT_NUM_GENERATIONS)."
+    exit 1
+fi
+
+if [[ "$REPT_OPENENV_MODE" == "episode" && "$REPT_USE_VLLM" != "1" ]]; then
+    echo "[ERROR] REPT_OPENENV_MODE=episode requires REPT_USE_VLLM=1."
+    exit 1
+fi
 
 CACHE_ROOT="${DATA_ROOT}/cache"
 mkdir -p "$CACHE_ROOT/pip" "$CACHE_ROOT/huggingface" "$CACHE_ROOT/tmp" "$REPT_OUTPUT_DIR"
@@ -137,6 +151,7 @@ echo "  Python:      $(python --version)"
 echo "  Torch:       $(python -c 'import torch; print(torch.__version__)')"
 echo "  CUDA avail:  $(python -c 'import torch; print(torch.cuda.is_available())')"
 echo "  Model:       $REPT_MODEL"
+echo "  OpenEnv mode:$REPT_OPENENV_MODE"
 echo "  Output dir:  $REPT_OUTPUT_DIR"
 echo "  Env URL:     $ENV_BASE_URL"
 echo "  DType:       $REPT_TORCH_DTYPE"
@@ -148,6 +163,7 @@ echo "==============================="
 TRAIN_CMD=(
     python -m training.grpo_train
     --model "$REPT_MODEL"
+    --openenv_mode "$REPT_OPENENV_MODE"
     --env_base_url "$ENV_BASE_URL"
     --alpha "$REPT_ALPHA"
     --log_every_n_steps "$REPT_LOG_EVERY"
@@ -160,6 +176,7 @@ TRAIN_CMD=(
     --torch_dtype "$REPT_TORCH_DTYPE"
     --vllm_mode "$REPT_VLLM_MODE"
     --output_dir "$REPT_OUTPUT_DIR"
+    --reward_log_path "$REPT_REWARD_LOG_PATH"
 )
 
 if [[ "$REPT_USE_VLLM" == "1" ]]; then
@@ -176,6 +193,10 @@ if [[ "$REPT_USE_VLLM" == "1" ]]; then
     if [[ "$REPT_VLLM_ENABLE_SLEEP_MODE" == "1" ]]; then
         TRAIN_CMD+=(--vllm_enable_sleep_mode)
     fi
+fi
+
+if [[ "$REPT_OPENENV_MODE" == "episode" ]]; then
+    export TRL_EXPERIMENTAL_SILENCE="${TRL_EXPERIMENTAL_SILENCE:-1}"
 fi
 
 if [[ $DRY_RUN -eq 1 ]]; then
