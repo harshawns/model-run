@@ -5,8 +5,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 
-PT_ROOT_DEFAULT="$PROJECT_ROOT/larger-model/ReasoningEconomicsPT"
-ENV_ROOT_DEFAULT="$PROJECT_ROOT/larger-model/ReasoningEconomicsEnv"
+PT_ROOT_DEFAULT="$PROJECT_ROOT/ReasoningEconomicsPT"
+ENV_ROOT_DEFAULT="$PROJECT_ROOT/ReasoningEconomicsEnv"
 
 export REPT_ROOT="${REPT_ROOT:-$PT_ROOT_DEFAULT}"
 export ENV_ROOT="${ENV_ROOT:-$ENV_ROOT_DEFAULT}"

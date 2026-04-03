@@ -1,4 +1,4 @@
-# Larger-Model GPU Bundle
+# Model-Run GPU Bundle
 
 This folder is a runnable wrapper bundle for launching the competition-compliant
 OpenEnv GRPO pipeline (episode mode) on a GPU machine with vLLM, with a
@@ -8,13 +8,13 @@ hardware-specific default profile for one AWS `p5.4xlarge`
 It now includes copied source snapshots of the modified forks inside this
 folder:
 
-- [ReasoningEconomicsPT](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/ReasoningEconomicsPT)
-- [ReasoningEconomicsEnv](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/ReasoningEconomicsEnv)
+- [ReasoningEconomicsPT](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT)
+- [ReasoningEconomicsEnv](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsEnv)
 
 These are copied from the modified forks under `my_forks/`, excluding local-only
 artifacts such as `runs/`, venvs, caches, and `__pycache__`.
 
-If you move to a Lambda / GPU VM, copy this whole `larger-model/` folder so the
+If you move to a Lambda / GPU VM, clone or copy this whole `model-run/` folder so the
 wrappers and the patched PT/Env source stay together.
 
 For a detailed explanation of what was changed in the PT and Env snapshots, see
@@ -24,8 +24,8 @@ For a detailed explanation of what was changed in the PT and Env snapshots, see
 
 ### Modified PT repo required
 
-The larger-model run uses the copied PT snapshot in
-[grpo_train.py](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/ReasoningEconomicsPT/training/grpo_train.py),
+This bundle uses the copied PT snapshot in
+[grpo_train.py](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/training/grpo_train.py),
 not the upstream trainer. Important changes already in that file:
 
 - `--openenv_mode {flat,episode}` — flat V1 and multi-question episode mode
@@ -41,26 +41,26 @@ not the upstream trainer. Important changes already in that file:
 
 The bundle also uses:
 
-- [scout_openenv_seeds.py](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/ReasoningEconomicsPT/training/scout_openenv_seeds.py)
-- [run_grpo_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/ReasoningEconomicsPT/scripts/run_grpo_lambda.sh)
-- [summarize_episode_run.py](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/ReasoningEconomicsPT/scripts/summarize_episode_run.py)
-- [bootstrap_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/ReasoningEconomicsPT/scripts/bootstrap_lambda.sh)
-- [preflight_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/ReasoningEconomicsPT/scripts/preflight_lambda.sh)
+- [scout_openenv_seeds.py](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/training/scout_openenv_seeds.py)
+- [run_grpo_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/scripts/run_grpo_lambda.sh)
+- [summarize_episode_run.py](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/scripts/summarize_episode_run.py)
+- [bootstrap_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/scripts/bootstrap_lambda.sh)
+- [preflight_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/scripts/preflight_lambda.sh)
 
 ### Modified Env repo required
 
-The larger-model run also expects the copied environment snapshot in
-[ReasoningEconomicsEnv](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/ReasoningEconomicsEnv).
+The bundle also expects the copied environment snapshot in
+[ReasoningEconomicsEnv](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsEnv).
 Important env-side changes already in place:
 
 - shared final-answer parsing / grading
 - enforced `max_tokens_per_step`
 - env-var-driven config in
-  [config.py](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/ReasoningEconomicsEnv/env/config.py)
+  [config.py](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsEnv/env/config.py)
 - richer reward shaping in
-  [reward.py](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/ReasoningEconomicsEnv/env/reward.py)
+  [reward.py](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsEnv/env/reward.py)
 - richer step metadata in
-  [reason_budget_env.py](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/ReasoningEconomicsEnv/env/reason_budget_env.py)
+  [reason_budget_env.py](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsEnv/env/reason_budget_env.py)
 
 Without those env changes, the reward behavior and diagnostics described in the
 rest of this project will not match.
@@ -71,7 +71,7 @@ rest of this project will not match.
 
 Use:
 
-- [p5_4xlarge_h100.lambda.env.example](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/p5_4xlarge_h100.lambda.env.example)
+- [p5_4xlarge_h100.lambda.env.example](/Users/harshawnsingh/Desktop/csci-544/project/model-run/p5_4xlarge_h100.lambda.env.example)
 
 This profile defaults to:
 
@@ -92,7 +92,7 @@ before scaling to `Qwen/Qwen3-14B`.
 
 Use only if you move to a larger-memory or multi-GPU setup:
 
-- [qwen3_32b_reference.lambda.env.example](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/qwen3_32b_reference.lambda.env.example)
+- [qwen3_32b_reference.lambda.env.example](/Users/harshawnsingh/Desktop/csci-544/project/model-run/qwen3_32b_reference.lambda.env.example)
 
 Why it is not the default on `p5.4xlarge`:
 
@@ -105,26 +105,26 @@ So a single `80 GB` H100 is not where I would try to run `Qwen3-32B` in this rep
 
 ## What This Bundle Contains
 
-- [qwen3_32b_reference.lambda.env.example](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/qwen3_32b_reference.lambda.env.example)
+- [qwen3_32b_reference.lambda.env.example](/Users/harshawnsingh/Desktop/csci-544/project/model-run/qwen3_32b_reference.lambda.env.example)
   Reference-only env file for a larger-memory or multi-GPU 32B run.
-- [p5_4xlarge_h100.lambda.env.example](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/p5_4xlarge_h100.lambda.env.example)
+- [p5_4xlarge_h100.lambda.env.example](/Users/harshawnsingh/Desktop/csci-544/project/model-run/p5_4xlarge_h100.lambda.env.example)
   Recommended single-H100 env file.
-- [_common.sh](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/_common.sh)
+- [_common.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/_common.sh)
   Shared defaults used by the wrappers.
-- [bootstrap_p5_4xlarge_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/bootstrap_p5_4xlarge_h100_lambda.sh)
+- [bootstrap_p5_4xlarge_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/bootstrap_p5_4xlarge_h100_lambda.sh)
   One-time dependency/bootstrap wrapper.
-- [preflight_p5_4xlarge_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/preflight_p5_4xlarge_h100_lambda.sh)
+- [preflight_p5_4xlarge_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/preflight_p5_4xlarge_h100_lambda.sh)
   Sanity checks before launch.
-- [start_openenv_server.sh](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/start_openenv_server.sh)
+- [start_openenv_server.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/start_openenv_server.sh)
   Starts the local env server in V1 mode.
-- [scout_p5_4xlarge_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/scout_p5_4xlarge_h100_lambda.sh)
+- [scout_p5_4xlarge_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/scout_p5_4xlarge_h100_lambda.sh)
   Runs seed scouting for the larger model.
-- [run_p5_4xlarge_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/run_p5_4xlarge_h100_lambda.sh)
+- [run_p5_4xlarge_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/run_p5_4xlarge_h100_lambda.sh)
   Launches the full training run.
 
 ## Default Assumptions
 
-The default wrapper profile in [_common.sh](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/_common.sh) is:
+The default wrapper profile in [_common.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/_common.sh) is:
 
 - `REPT_PROFILE=p5.4xlarge-single-h100`
 - `REPT_MODEL=Qwen/Qwen3-14B`
@@ -149,7 +149,7 @@ These defaults are deliberate:
 3. `1024` is the validated local starting point for 4-question episodes. GPU runs may need 1280–1536 depending on vLLM pressure.
 4. all-50 prompts is still the best local baseline shape; pure mixed-only filtering did not beat the all-50 run on local MPS.
 5. `num_generations=4` is the main next lever for GPU training.
-6. `bfloat16` is required for a realistic single-H100 larger-model run.
+6. `bfloat16` is required for a realistic single-H100 run in this bundle.
 
 ## Important Constraint
 
@@ -165,24 +165,24 @@ If `Qwen/Qwen3-32B` OOMs, the practical options are:
 
 ## Quick Start
 
-This is the shortest end-to-end path after you have copied the `larger-model/`
-folder to the GPU machine.
+This is the shortest end-to-end path after you have copied or cloned the
+`model-run/` repo to the GPU machine.
 
 ### 1. Copy and edit the env file
 
 ```bash
-cd /path/to/project/larger-model
+cd /path/to/project/model-run
 cp p5_4xlarge_h100.lambda.env.example p5_4xlarge_h100.lambda.env
 ```
 
 Edit at least these variables in `p5_4xlarge_h100.lambda.env`:
 
 - `REPT_ROOT`
-  Absolute path to the copied PT snapshot inside `larger-model/` on the GPU machine.
+  Absolute path to the copied PT snapshot inside `model-run/` on the GPU machine.
 - `REPT_VENV`
   Absolute path to the training venv on the GPU machine.
 - `ENV_ROOT`
-  Absolute path to the copied Env snapshot inside `larger-model/` on the GPU machine.
+  Absolute path to the copied Env snapshot inside `model-run/` on the GPU machine.
 - `REPT_FS_NAME`
   Your Lambda filesystem name, if you use one.
 - `REPT_DATA_ROOT`
@@ -199,7 +199,7 @@ export ENV_BASE_URL=http://127.0.0.1:8010
 ### 2. Source the env file
 
 ```bash
-cd /path/to/project/larger-model
+cd /path/to/project/model-run
 source ./p5_4xlarge_h100.lambda.env
 ```
 
@@ -244,14 +244,14 @@ You have two choices.
 Use this if you have the modified env fork on the same machine.
 
 ```bash
-cd /path/to/project/larger-model
+cd /path/to/project/model-run
 source ./p5_4xlarge_h100.lambda.env
 ./start_openenv_server.sh
 ```
 
 Defaults:
 
-- `ENV_ROOT` defaults to `project/larger-model/ReasoningEconomicsEnv`
+- `ENV_ROOT` defaults to `project/model-run/ReasoningEconomicsEnv`
 - `ENV_VENV` defaults to `$ENV_ROOT/.venv-server`
 - host defaults to `127.0.0.1`
 - port defaults to `8010`
@@ -279,7 +279,7 @@ and skip `start_openenv_server.sh`.
 Before a full large-model run, scout the seeds for that same model.
 
 ```bash
-cd /path/to/project/larger-model
+cd /path/to/project/model-run
 source ./p5_4xlarge_h100.lambda.env
 ./scout_p5_4xlarge_h100_lambda.sh
 ```
@@ -307,7 +307,7 @@ Why this matters:
 ### Dry run first
 
 ```bash
-cd /path/to/project/larger-model
+cd /path/to/project/model-run
 source ./p5_4xlarge_h100.lambda.env
 ./run_p5_4xlarge_h100_lambda.sh --dry-run
 ```
@@ -317,7 +317,7 @@ This prints the exact underlying `python -m training.grpo_train ...` command.
 ### Actual run
 
 ```bash
-cd /path/to/project/larger-model
+cd /path/to/project/model-run
 source ./p5_4xlarge_h100.lambda.env
 ./run_p5_4xlarge_h100_lambda.sh
 ```
@@ -332,9 +332,9 @@ By default this launches:
 - `--max_completion_length 384`
 
 The wrapper delegates to the PT script
-[run_grpo_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/larger-model/ReasoningEconomicsPT/scripts/run_grpo_lambda.sh),
+[run_grpo_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/scripts/run_grpo_lambda.sh),
 so the source of truth is still the PT repo. This folder only packages the
-larger-model defaults and launch order.
+bundle defaults and launch order.
 
 ## Optional: Train With A Seed Manifest
 
@@ -433,7 +433,7 @@ python ReasoningEconomicsPT/scripts/summarize_episode_run.py \
 Success criteria: `completion_rate=100%`, `termination_reasons={'env_done': N}`, `clipped_rate=0%`,
 non-zero `reward_std`.
 
-`Qwen/Qwen3-14B` is the eventual larger-model target, not the first smoke.
+`Qwen/Qwen3-14B` is the eventual bigger-model target, not the first smoke.
 
 ## Troubleshooting
 

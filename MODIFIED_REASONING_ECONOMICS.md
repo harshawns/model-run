@@ -147,7 +147,7 @@ Why this matters:
 
 - the trainer supports the GPU settings, but a reproducible launch path needs a
   wrapper that actually exposes them
-- the larger-model bundle depends on this script to remain the source of truth
+- this bundle depends on this script to remain the source of truth
   for training invocation
 
 ### `eval/evaluate.py`
@@ -182,7 +182,7 @@ The PT fork is what makes these things possible:
 - deterministic seed replay works
 - local and GPU launches share one trainer path
 - seed scouting and bucketed dataset selection work
-- the larger-model bundle can launch against the copied PT snapshot instead of a
+- the bundle can launch against the copied PT snapshot instead of a
   hand-edited local repo
 
 ## Env Fork: `ReasoningEconomicsEnv`
@@ -361,7 +361,7 @@ If you remove either side, the current pipeline breaks down:
 
 ## Why The Current Bundle Uses Both Snapshots
 
-This repository includes copied snapshots of both forks because the larger-model
+This repository includes copied snapshots of both forks because the model-run
 launch path should be self-contained.
 
 That gives you:
