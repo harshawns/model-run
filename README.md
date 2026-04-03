@@ -18,7 +18,7 @@ If you move to a Lambda / GPU VM, copy this whole `larger-model/` folder so the
 wrappers and the patched PT/Env source stay together.
 
 For a detailed explanation of what was changed in the PT and Env snapshots, see
-[PATCHED_FORKS.md](PATCHED_FORKS.md).
+[MODIFIED_REASONING_ECONOMICS.md](MODIFIED_REASONING_ECONOMICS.md).
 
 ## What This Bundle Depends On
 

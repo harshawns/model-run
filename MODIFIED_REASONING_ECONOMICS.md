@@ -1,4 +1,4 @@
-# Patched PT and Env Forks
+# Modified ReasoningEconomics PT and Env Forks
 
 This repository is not a copy of the upstream project in its original state.
 It packages two modified source snapshots:
