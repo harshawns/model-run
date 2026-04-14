@@ -39,14 +39,14 @@ class TestEpisodeSummary(unittest.TestCase):
                 "total_completion_tokens": 120,
                 "total_tokens_serialized": 640,
                 "episode_clipped": True,
-                "termination_reason": "rollout_cap_exhausted",
+                "termination_reason": "max_episode_turns",
             },
         ]
 
         summary = summarize_episode_records(records)
         self.assertEqual(summary["num_episodes"], 2)
         self.assertEqual(summary["termination_reasons"]["env_done"], 1)
-        self.assertEqual(summary["termination_reasons"]["rollout_cap_exhausted"], 1)
+        self.assertEqual(summary["termination_reasons"]["max_episode_turns"], 1)
         self.assertAlmostEqual(summary["completion_rate"], 0.5)
         self.assertAlmostEqual(summary["clipped_rate"], 0.5)
         self.assertAlmostEqual(summary["mean_completion_tokens"], 143.5)
@@ -54,7 +54,7 @@ class TestEpisodeSummary(unittest.TestCase):
         markdown = render_episode_summary_markdown(summary)
         self.assertIn("Episode Run Summary", markdown)
         self.assertIn("env_done", markdown)
-        self.assertIn("rollout_cap_exhausted", markdown)
+        self.assertIn("max_episode_turns", markdown)
 
     def test_summarize_legacy_schema(self):
         records = [

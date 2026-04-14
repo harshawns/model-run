@@ -49,6 +49,18 @@ elif [[ -n "${REPT_ROOT:-}" ]]; then
     fail "REPT_ROOT directory does not exist: $REPT_ROOT"
 fi
 
+REQ_FILE="${REPT_REQUIREMENTS_FILE:-${REPT_ROOT:-}/requirements.lambda.txt}"
+if [[ -n "${REPT_ROOT:-}" && -d "$REPT_ROOT" ]]; then
+    echo ""
+    echo "--- Requirements file ---"
+    if [[ -f "$REQ_FILE" ]]; then
+        pass "requirements file exists: $REQ_FILE"
+    else
+        warn "requirements file not found: $REQ_FILE"
+        warn "  bootstrap_lambda.sh defaults to requirements.lambda.txt; set REPT_REQUIREMENTS_FILE to override."
+    fi
+fi
+
 if [[ -n "${REPT_VENV:-}" && -f "$REPT_VENV/bin/activate" ]]; then
     pass "REPT_VENV has bin/activate"
 elif [[ -n "${REPT_VENV:-}" ]]; then
@@ -93,7 +105,7 @@ if [[ -n "${REPT_VENV:-}" && -f "$REPT_VENV/bin/python" ]]; then
 
     echo ""
     echo "--- Critical imports ---"
-    for mod in torch vllm trl transformers datasets openenv; do
+    for mod in torch vllm trl transformers datasets openenv jmespath; do
         if "$VENV_PY" -c "import $mod" >/dev/null 2>&1; then
             pass "import $mod"
         else
@@ -106,6 +118,63 @@ if [[ -n "${REPT_VENV:-}" && -f "$REPT_VENV/bin/python" ]]; then
         pass "torch.cuda.is_available() is True"
     else
         fail "torch.cuda.is_available() is False"
+    fi
+
+    echo ""
+    echo "--- Multi-GPU / training layout ---"
+    GPU_COUNT=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | wc -l | tr -d ' ')
+    if ! [[ "$GPU_COUNT" =~ ^[0-9]+$ ]]; then
+        GPU_COUNT=0
+    fi
+    echo "  Visible GPUs: $GPU_COUNT"
+
+    REPT_VLLM_MODE="${REPT_VLLM_MODE:-auto}"
+    if [[ "$REPT_VLLM_MODE" != "auto" && "$REPT_VLLM_MODE" != "server" && "$REPT_VLLM_MODE" != "colocate" ]]; then
+        fail "REPT_VLLM_MODE must be auto, server, or colocate (got: $REPT_VLLM_MODE)"
+    fi
+    REPT_VLLM_TP="${REPT_VLLM_TP:-1}"
+    RESOLVED_MODE="$REPT_VLLM_MODE"
+    if [[ "$RESOLVED_MODE" == "auto" ]]; then
+        if [[ "$GPU_COUNT" -ge 2 ]]; then
+            RESOLVED_MODE="server"
+        else
+            RESOLVED_MODE="colocate"
+        fi
+    fi
+    echo "  Resolved vLLM mode: $RESOLVED_MODE (REPT_VLLM_TP=$REPT_VLLM_TP)"
+
+    if [[ "$RESOLVED_MODE" == "server" ]]; then
+        if [[ "$GPU_COUNT" -lt 2 ]]; then
+            fail "vllm_mode=server requires >= 2 visible GPUs, found $GPU_COUNT"
+        fi
+        if [[ "$GPU_COUNT" -le "$REPT_VLLM_TP" ]]; then
+            fail "GPU count ($GPU_COUNT) must be > REPT_VLLM_TP ($REPT_VLLM_TP) for server mode"
+        fi
+    fi
+
+    REPT_BATCH_SIZE="${REPT_BATCH_SIZE:-8}"
+    REPT_NUM_GENERATIONS="${REPT_NUM_GENERATIONS:-8}"
+    rem=$((REPT_BATCH_SIZE % REPT_NUM_GENERATIONS))
+    if [[ "$rem" -ne 0 ]]; then
+        fail "REPT_BATCH_SIZE ($REPT_BATCH_SIZE) must be divisible by REPT_NUM_GENERATIONS ($REPT_NUM_GENERATIONS) for GRPO"
+    else
+        pass "REPT_BATCH_SIZE / REPT_NUM_GENERATIONS divisibility OK ($REPT_BATCH_SIZE / $REPT_NUM_GENERATIONS)"
+    fi
+
+    if [[ "$GPU_COUNT" -ge 2 ]]; then
+        if "$VENV_PY" -c "import torch.distributed" >/dev/null 2>&1; then
+            pass "torch.distributed available"
+        else
+            fail "torch.distributed not importable (needed for multi-GPU training)"
+        fi
+    fi
+
+    if [[ "$RESOLVED_MODE" == "server" ]]; then
+        if [[ -x "${REPT_VENV}/bin/accelerate" ]]; then
+            pass "accelerate CLI in venv (server mode)"
+        else
+            fail "accelerate not found at ${REPT_VENV}/bin/accelerate (required for vllm_mode=server)"
+        fi
     fi
 else
     fail "Cannot run Python checks because REPT_VENV python is unavailable"

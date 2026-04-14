@@ -7,6 +7,7 @@ episode-level ``episode_reward``, ``num_steps``, ``steps[*].raw_step_reward``, e
 Usage:
   pip install -r requirements.analysis.txt
   python scripts/analyze_reward_logs.py path/to/reward_logs.jsonl --out-dir ./reward_analysis
+
 """
 
 from __future__ import annotations
@@ -98,6 +99,7 @@ def print_summary(ep_df: pd.DataFrame, st_df: pd.DataFrame) -> None:
     single = (ep_df["num_steps"] == 1).sum()
     print(f"Fraction num_steps == 1: {single / n_ep:.3f}  ({single}/{n_ep})")
 
+    # Heuristic: immediate abort (common env/protocol issue)
     mask_abort = (
         (ep_df["num_steps"] == 1)
         & (ep_df["first_raw_step_reward"] == 0)
@@ -118,7 +120,7 @@ def print_summary(ep_df: pd.DataFrame, st_df: pd.DataFrame) -> None:
 def plot_all(ep_df: pd.DataFrame, st_df: pd.DataFrame, out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     sns.set_theme(style="whitegrid", context="notebook")
-
+    # Episode reward distribution
     fig, ax = plt.subplots(figsize=(8, 4))
     sns.histplot(ep_df["episode_reward"], kde=True, ax=ax, bins=min(40, max(10, len(ep_df) // 5)))
     ax.set_title("Episode reward distribution")
@@ -127,6 +129,7 @@ def plot_all(ep_df: pd.DataFrame, st_df: pd.DataFrame, out_dir: Path) -> None:
     fig.savefig(out_dir / "01_episode_reward_hist.png", dpi=150)
     plt.close(fig)
 
+    # num_steps distribution
     fig, ax = plt.subplots(figsize=(8, 4))
     vc = ep_df["num_steps"].value_counts().sort_index()
     top = vc.head(25)
@@ -138,6 +141,7 @@ def plot_all(ep_df: pd.DataFrame, st_df: pd.DataFrame, out_dir: Path) -> None:
     fig.savefig(out_dir / "02_num_steps_count.png", dpi=150)
     plt.close(fig)
 
+    # Episode reward vs num_steps
     fig, ax = plt.subplots(figsize=(8, 4))
     cap = int(ep_df["num_steps"].quantile(0.99)) if len(ep_df) > 5 else int(ep_df["num_steps"].max())
     cap = max(cap, 1)
@@ -148,6 +152,7 @@ def plot_all(ep_df: pd.DataFrame, st_df: pd.DataFrame, out_dir: Path) -> None:
     fig.savefig(out_dir / "03_episode_reward_vs_num_steps_box.png", dpi=150)
     plt.close(fig)
 
+    # Time / order index
     fig, ax = plt.subplots(figsize=(9, 4))
     window = max(1, min(25, len(ep_df) // 20))
     rolling = ep_df["episode_reward"].rolling(window=window, min_periods=1).mean()
@@ -183,6 +188,7 @@ def plot_all(ep_df: pd.DataFrame, st_df: pd.DataFrame, out_dir: Path) -> None:
         fig.savefig(out_dir / "06_step_reward_vs_budget.png", dpi=150)
         plt.close(fig)
 
+    # Diagnostic flags
     fig, ax = plt.subplots(figsize=(6, 4))
     labels = []
     vals = []
@@ -213,7 +219,11 @@ def plot_all(ep_df: pd.DataFrame, st_df: pd.DataFrame, out_dir: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Analyze reward_logs.jsonl from GRPO training.")
-    parser.add_argument("jsonl_path", type=Path, help="Path to reward_logs.jsonl")
+    parser.add_argument(
+        "jsonl_path",
+        type=Path,
+        help="Path to reward_logs.jsonl",
+    )
     parser.add_argument(
         "--out-dir",
         type=Path,

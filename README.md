@@ -28,22 +28,19 @@ This bundle uses the copied PT snapshot in
 [grpo_train.py](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/training/grpo_train.py),
 not the upstream trainer. Important changes already in that file:
 
-- `--openenv_mode {flat,episode}` — flat V1 and multi-question episode mode
-- episode rollout via TRL `rollout_func` with `env_mask` tracking
-- extended JSONL reward log with `termination_reason`, `episode_clipped`, step-level token diagnostics
-- flat OpenEnv `reward_funcs` path (V1 fallback)
-- deterministic seed replay via `env_seed`
-- local-cache-friendly tokenizer loading
+- multi-question episode rollout via TRL `rollout_func`
+- tokenizer-aligned env resets with `--env_tokenizer_name`
+- model-profile support for Qwen think-tag parsing and visible-only grading
+- extended episode reward logging plus summary tooling
 - LoRA-capable GRPO path
-- seed-manifest filtering support:
-  - `--seed_manifest_path`
-  - `--seed_bucket`
+- seed-manifest filtering support in the rollout path
 
 The bundle also uses:
 
 - [scout_openenv_seeds.py](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/training/scout_openenv_seeds.py)
 - [run_grpo_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/scripts/run_grpo_lambda.sh)
 - [summarize_episode_run.py](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/scripts/summarize_episode_run.py)
+- [analyze_reward_logs.py](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/scripts/analyze_reward_logs.py)
 - [bootstrap_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/scripts/bootstrap_lambda.sh)
 - [preflight_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/scripts/preflight_lambda.sh)
 
@@ -53,14 +50,13 @@ The bundle also expects the copied environment snapshot in
 [ReasoningEconomicsEnv](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsEnv).
 Important env-side changes already in place:
 
-- shared final-answer parsing / grading
-- enforced `max_tokens_per_step`
-- env-var-driven config in
+- tokenizer-native budget alignment via reset-time `tokenizer_name`
+- optional `grading_response` for hybrid-thinking models such as Qwen3
+- explicit client budget override via `total_budget`
+- server-side config defaults through
   [config.py](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsEnv/env/config.py)
-- richer reward shaping in
-  [reward.py](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsEnv/env/reward.py)
-- richer step metadata in
-  [reason_budget_env.py](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsEnv/env/reason_budget_env.py)
+- deployment support in
+  [server/docker-entrypoint.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsEnv/server/docker-entrypoint.sh)
 
 Without those env changes, the reward behavior and diagnostics described in the
 rest of this project will not match.
@@ -76,12 +72,10 @@ Use:
 This profile defaults to:
 
 - `REPT_MODEL=Qwen/Qwen3-14B`
-- `REPT_TORCH_DTYPE=bfloat16`
 - `REPT_NUM_GENERATIONS=4`
 - `REPT_BATCH_SIZE=4`
-- `REPT_OPENENV_MODE=episode`
 - `REPT_VLLM_MODE=colocate`
-- `REPT_VLLM_GPU_MEMORY_UTILIZATION=0.25`
+- `REPT_VLLM_GPU_UTIL=0.25`
 - `REPT_MAX_COMPLETION_LENGTH=1024`
 - `REASON_BUDGET_NUM_QUESTIONS=4`
 
@@ -128,28 +122,25 @@ The default wrapper profile in [_common.sh](/Users/harshawnsingh/Desktop/csci-54
 
 - `REPT_PROFILE=p5.4xlarge-single-h100`
 - `REPT_MODEL=Qwen/Qwen3-14B`
-- `REPT_TORCH_DTYPE=bfloat16`
 - `REPT_NUM_GENERATIONS=4`
 - `REPT_BATCH_SIZE=4`
 - `REPT_GRAD_ACCUM=1`
 - `REPT_N_PROMPTS=50`
 - `REPT_VLLM_MODE=colocate`
-- `REPT_VLLM_GPU_MEMORY_UTILIZATION=0.25`
-- `REPT_VLLM_TENSOR_PARALLEL_SIZE=1`
-- `REPT_OPENENV_MODE=episode`
+- `REPT_VLLM_GPU_UTIL=0.25`
+- `REPT_VLLM_TP=1`
 - `REPT_MAX_COMPLETION_LENGTH=1024`
-- `REPT_USE_VLLM=1`
+- `REPT_REQUIREMENTS_FILE=$REPT_ROOT/requirements.lambda.txt`
 - `ENV_BASE_URL=http://127.0.0.1:8010`
 - `REASON_BUDGET_NUM_QUESTIONS=4`
 
 These defaults are deliberate:
 
 1. `batch_size` must be divisible by `num_generations` for GRPO.
-2. `episode` mode is the validated multi-question path. Use `flat` only for V1 baseline comparisons.
-3. `1024` is the validated local starting point for 4-question episodes. GPU runs may need 1280–1536 depending on vLLM pressure.
-4. all-50 prompts is still the best local baseline shape; pure mixed-only filtering did not beat the all-50 run on local MPS.
-5. `num_generations=4` is the main next lever for GPU training.
-6. `bfloat16` is required for a realistic single-H100 run in this bundle.
+2. the current `code` PT path is rollout-based and episode-oriented by default.
+3. `1024` is the bundle starting point for 4-question runs, but GPU runs may need 1280–1536 depending on vLLM pressure.
+4. all-50 prompts is the current simple bundle baseline.
+5. `num_generations=4` is a practical first single-GPU setting.
 
 ## Important Constraint
 
@@ -325,11 +316,11 @@ source ./p5_4xlarge_h100.lambda.env
 By default this launches:
 
 - `training.grpo_train`
-- `--use_vllm`
 - `--model Qwen/Qwen3-14B`
 - `--num_generations 4`
 - `--n_prompts 50`
 - `--max_completion_length 1024`
+- `--vllm_mode colocate`
 
 The wrapper delegates to the PT script
 [run_grpo_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/scripts/run_grpo_lambda.sh),
@@ -356,7 +347,6 @@ python -m training.grpo_train \
   --per_device_train_batch_size "$REPT_BATCH_SIZE" \
   --gradient_accumulation_steps "$REPT_GRAD_ACCUM" \
   --vllm_mode "$REPT_VLLM_MODE" \
-  --use_vllm \
   --output_dir "$REPT_OUTPUT_DIR"
 ```
 
@@ -384,7 +374,7 @@ Expected training outputs include:
 
 - Multi-question episode mode is validated locally (4-question, CPU, Qwen3-0.6B).
 - Full 4-question episodes complete end-to-end: `termination_reason=env_done`, `episode_clipped=False`, `final_questions_remaining=0`.
-- `max_completion_length=1024` is the validated local starting point for 4-question episodes with the compact observation prompt. This is not a proven minimum — GPU runs may need more.
+- `max_completion_length=1024` is the bundle starting point for 4-question episodes. This is not a proven minimum — GPU runs may need more.
 - Episode-mode eval parity is available: every run produces `reward_log.jsonl`. Summarize with `scripts/summarize_episode_run.py`.
 - GPU/vLLM validation on H100 is the next remaining step.
 
@@ -404,7 +394,7 @@ Set `REPT_MAX_COMPLETION_LENGTH` to control. Use `scripts/summarize_episode_run.
 `clipped_rate` and `termination_reasons` after each candidate.
 
 > **Memory note:** Local success at 1024 does not guarantee H100 memory safety. vLLM colocate mode
-> dominates memory. If OOM, tune `REPT_VLLM_GPU_MEMORY_UTILIZATION` before raising sequence length.
+> dominates memory. If OOM, tune `REPT_VLLM_GPU_UTIL` before raising sequence length.
 
 ## First H100 Episode Smoke (Recommended Starting Point)
 
@@ -418,7 +408,6 @@ bash start_openenv_server.sh
 
 # 2. Run episode smoke
 export REPT_MODEL=Qwen/Qwen3-1.7B
-export REPT_OPENENV_MODE=episode
 export REPT_NUM_GENERATIONS=4
 export REPT_BATCH_SIZE=4
 export REPT_GRAD_ACCUM=4

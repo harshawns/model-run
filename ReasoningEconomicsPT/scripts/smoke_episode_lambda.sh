@@ -22,11 +22,11 @@ REPT_NUM_EPOCHS="${REPT_NUM_EPOCHS:-1}"
 REPT_NUM_GENERATIONS="${REPT_NUM_GENERATIONS:-4}"
 REPT_BATCH_SIZE="${REPT_BATCH_SIZE:-4}"
 REPT_GRAD_ACCUM="${REPT_GRAD_ACCUM:-4}"
-REPT_TORCH_DTYPE="${REPT_TORCH_DTYPE:-bfloat16}"
 REPT_VLLM_MODE="${REPT_VLLM_MODE:-colocate}"
-REPT_VLLM_GPU_MEMORY_UTILIZATION="${REPT_VLLM_GPU_MEMORY_UTILIZATION:-0.25}"
+REPT_VLLM_GPU_UTIL="${REPT_VLLM_GPU_UTIL:-${REPT_VLLM_GPU_MEMORY_UTILIZATION:-0.25}}"
 REPT_MAX_COMPLETION_LENGTH="${REPT_MAX_COMPLETION_LENGTH:-1024}"
-REPT_N_PROMPTS="${REPT_N_PROMPTS:-4}"
+REPT_MAX_TOKENS_PER_STEP="${REPT_MAX_TOKENS_PER_STEP:-256}"
+REPT_MAX_EPISODE_TURNS="${REPT_MAX_EPISODE_TURNS:-8}"
 
 if (( REPT_BATCH_SIZE % REPT_NUM_GENERATIONS != 0 )); then
     echo "[ERROR] REPT_BATCH_SIZE ($REPT_BATCH_SIZE) must be divisible by REPT_NUM_GENERATIONS ($REPT_NUM_GENERATIONS)"
@@ -41,19 +41,17 @@ source "$REPT_VENV/bin/activate"
 
 python -m training.grpo_train \
   --model "$REPT_MODEL" \
-  --openenv_mode episode \
   --env_base_url "$ENV_BASE_URL" \
   --reward_log_path "$REPT_REWARD_LOG_PATH" \
   --num_train_epochs "$REPT_NUM_EPOCHS" \
   --num_generations "$REPT_NUM_GENERATIONS" \
-  --n_prompts "$REPT_N_PROMPTS" \
   --per_device_train_batch_size "$REPT_BATCH_SIZE" \
   --gradient_accumulation_steps "$REPT_GRAD_ACCUM" \
-  --torch_dtype "$REPT_TORCH_DTYPE" \
-  --use_vllm \
   --vllm_mode "$REPT_VLLM_MODE" \
-  --vllm_gpu_memory_utilization "$REPT_VLLM_GPU_MEMORY_UTILIZATION" \
+  --vllm_gpu_memory_utilization "$REPT_VLLM_GPU_UTIL" \
   --max_completion_length "$REPT_MAX_COMPLETION_LENGTH" \
+  --max_tokens_per_step "$REPT_MAX_TOKENS_PER_STEP" \
+  --max_episode_turns "$REPT_MAX_EPISODE_TURNS" \
   --output_dir "$REPT_OUTPUT_DIR"
 
 python scripts/summarize_episode_run.py "$REPT_REWARD_LOG_PATH"

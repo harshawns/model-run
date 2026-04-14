@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+import re
 from typing import Optional
 
 from datasets import load_dataset
 
 from data.question import Question
-from env.grading import extract_final_answer
 
 # Canonical MetaMathQA `type` values (see dataset card).
 METAMATHQA_PROBLEM_TYPES: tuple[str, ...] = (
@@ -27,8 +27,18 @@ METAMATHQA_TYPE_SET = frozenset(METAMATHQA_PROBLEM_TYPES)
 NUMINA_PROBLEM_TYPE = "NuminaMath_TIR"
 
 
+def _extract_boxed(text: str) -> Optional[str]:
+    r"""Extract content of last \boxed{...} in text, or None."""
+    if not text:
+        return None
+    matches = re.findall(r"\\boxed\{([^}]*)\}", text)
+    if matches:
+        return matches[-1].strip()
+    return None
+
+
 def _answer_from_solution(solution: str) -> str:
-    answer = extract_final_answer(solution)
+    answer = _extract_boxed(solution)
     if answer:
         return answer
     return solution.strip().split("\n")[-1] if solution else ""

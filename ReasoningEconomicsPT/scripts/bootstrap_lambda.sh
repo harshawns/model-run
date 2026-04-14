@@ -6,6 +6,8 @@
 #   export REPT_VENV=/home/ubuntu/.venvs/rept-lambda
 #   export REPT_FS_NAME=<lambda-filesystem-name>   # optional if REPT_DATA_ROOT set
 #   export REPT_DATA_ROOT=/lambda/nfs/<fs-name>/rept  # optional override
+#   export PYTORCH_WHEEL_INDEX=https://download.pytorch.org/whl/cu121  # recommended for torch wheels
+#   export REPT_REQUIREMENTS_FILE="$REPT_ROOT/requirements.txt"  # override default pin file if needed
 #   bash scripts/bootstrap_lambda.sh
 
 set -euo pipefail
@@ -21,7 +23,7 @@ else
     DATA_ROOT="/lambda/nfs/rept"
 fi
 
-REPT_REQUIREMENTS_FILE="${REPT_REQUIREMENTS_FILE:-$REPT_ROOT/requirements.txt}"
+REPT_REQUIREMENTS_FILE="${REPT_REQUIREMENTS_FILE:-$REPT_ROOT/requirements.lambda.txt}"
 PYTORCH_WHEEL_INDEX="${PYTORCH_WHEEL_INDEX:-}"
 REPT_VENV_SYSTEM_SITE_PACKAGES="${REPT_VENV_SYSTEM_SITE_PACKAGES:-auto}"
 REPT_SKIP_TORCH_INSTALL="${REPT_SKIP_TORCH_INSTALL:-auto}"
@@ -118,6 +120,9 @@ else
     pip install -r "$REQ_TO_INSTALL"
 fi
 
+# echo ">>> TEMORARY TRANSFORMERS PIN..."
+# pip install transformers==5.3.0 --force-reinstall --no-deps
+
 echo ""
 echo ">>> GPU visibility check"
 if command -v nvidia-smi >/dev/null 2>&1; then
@@ -134,12 +139,14 @@ import vllm
 import trl
 import transformers
 import openenv
+import jmespath
 
 print(f"  torch        {torch.__version__}  CUDA={torch.cuda.is_available()}")
 print(f"  vllm         {vllm.__version__}")
 print(f"  trl          {trl.__version__}")
 print(f"  transformers {transformers.__version__}")
 print("  openenv-core OK")
+print(f"  jmespath     {jmespath.__version__}")
 PY
 
 echo ""
