@@ -23,6 +23,25 @@ fi
 
 REPT_REQUIREMENTS_FILE="${REPT_REQUIREMENTS_FILE:-$REPT_ROOT/requirements.txt}"
 PYTORCH_WHEEL_INDEX="${PYTORCH_WHEEL_INDEX:-}"
+REPT_VENV_SYSTEM_SITE_PACKAGES="${REPT_VENV_SYSTEM_SITE_PACKAGES:-auto}"
+REPT_SKIP_TORCH_INSTALL="${REPT_SKIP_TORCH_INSTALL:-auto}"
+
+ARCH="$(uname -m)"
+if [[ "$REPT_VENV_SYSTEM_SITE_PACKAGES" == "auto" ]]; then
+    if [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
+        REPT_VENV_SYSTEM_SITE_PACKAGES=1
+    else
+        REPT_VENV_SYSTEM_SITE_PACKAGES=0
+    fi
+fi
+
+if [[ "$REPT_SKIP_TORCH_INSTALL" == "auto" ]]; then
+    if [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
+        REPT_SKIP_TORCH_INSTALL=1
+    else
+        REPT_SKIP_TORCH_INSTALL=0
+    fi
+fi
 
 CACHE_ROOT="${DATA_ROOT}/cache"
 RUNS_ROOT="${DATA_ROOT}/runs"
@@ -32,7 +51,10 @@ echo "=== Lambda Bootstrap ==="
 echo "  REPT_ROOT             = $REPT_ROOT"
 echo "  REPT_VENV             = $REPT_VENV"
 echo "  DATA_ROOT             = $DATA_ROOT"
+echo "  Architecture          = $ARCH"
 echo "  Requirements          = $REPT_REQUIREMENTS_FILE"
+echo "  System site-packages  = $REPT_VENV_SYSTEM_SITE_PACKAGES"
+echo "  Skip torch install    = $REPT_SKIP_TORCH_INSTALL"
 if [[ -n "$PYTORCH_WHEEL_INDEX" ]]; then
     echo "  PyTorch extra index   = $PYTORCH_WHEEL_INDEX"
 else
@@ -57,7 +79,11 @@ if [[ -d "$REPT_VENV" ]]; then
     echo ">>> Reusing existing venv at $REPT_VENV"
 else
     echo ">>> Creating venv at $REPT_VENV"
-    python3 -m venv "$REPT_VENV"
+    if [[ "$REPT_VENV_SYSTEM_SITE_PACKAGES" == "1" ]]; then
+        python3 -m venv --system-site-packages "$REPT_VENV"
+    else
+        python3 -m venv "$REPT_VENV"
+    fi
 fi
 
 # shellcheck source=/dev/null
@@ -79,10 +105,17 @@ echo ">>> Upgrading pip..."
 pip install --quiet --upgrade pip
 
 echo ">>> Installing dependencies..."
+REQ_TO_INSTALL="$REPT_REQUIREMENTS_FILE"
+if [[ "$REPT_SKIP_TORCH_INSTALL" == "1" ]]; then
+    FILTERED_REQ="$TMPDIR/$(basename "$REPT_REQUIREMENTS_FILE").no-torch.txt"
+    grep -v '^[[:space:]]*torch[[:space:]=<>!~]' "$REPT_REQUIREMENTS_FILE" > "$FILTERED_REQ"
+    REQ_TO_INSTALL="$FILTERED_REQ"
+    echo "    Skipping torch from requirements file; relying on system torch."
+fi
 if [[ -n "$PYTORCH_WHEEL_INDEX" ]]; then
-    pip install -r "$REPT_REQUIREMENTS_FILE" --extra-index-url "$PYTORCH_WHEEL_INDEX"
+    pip install -r "$REQ_TO_INSTALL" --extra-index-url "$PYTORCH_WHEEL_INDEX"
 else
-    pip install -r "$REPT_REQUIREMENTS_FILE"
+    pip install -r "$REQ_TO_INSTALL"
 fi
 
 echo ""

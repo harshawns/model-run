@@ -329,7 +329,7 @@ By default this launches:
 - `--model Qwen/Qwen3-14B`
 - `--num_generations 4`
 - `--n_prompts 50`
-- `--max_completion_length 384`
+- `--max_completion_length 1024`
 
 The wrapper delegates to the PT script
 [run_grpo_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/scripts/run_grpo_lambda.sh),
@@ -507,6 +507,36 @@ Practical guidance for this repo:
 
 - `Qwen/Qwen3-14B` on one `p5.4xlarge` is the right target
 - `Qwen/Qwen3-32B` is not the right default for one `80 GB` H100 in the current colocated-vLLM path
+
+## GH200 Note
+
+If you run this bundle on a Lambda `GH200 (96 GB)` instance instead of an H100 box:
+
+- use `Lambda Stack 22.04`
+- prefer a venv created with `--system-site-packages`
+- skip reinstalling the pinned `torch` wheel and reuse the image's system torch
+
+The PT bootstrap script supports this through:
+
+- `REPT_VENV_SYSTEM_SITE_PACKAGES=1`
+- `REPT_SKIP_TORCH_INSTALL=1`
+
+## Reward Log Analysis
+
+For quick reward-log diagnostics after a run:
+
+```bash
+cd "$REPT_ROOT"
+source "$REPT_VENV/bin/activate"
+pip install -r requirements.analysis.txt
+python scripts/analyze_reward_logs.py "$REPT_REWARD_LOG_PATH" --out-dir reward_log_analysis
+```
+
+For episode-mode summaries:
+
+```bash
+python scripts/summarize_episode_run.py "$REPT_REWARD_LOG_PATH"
+```
 
 The reason is not just raw model size. The run also needs:
 
