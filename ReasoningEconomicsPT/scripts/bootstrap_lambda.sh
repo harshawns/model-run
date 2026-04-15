@@ -157,6 +157,17 @@ echo "    TMPDIR              = $TMPDIR"
 echo ">>> Upgrading pip..."
 pip install --quiet --upgrade pip
 
+# Pre-install CUDA torch before the main requirements install.
+# --index-url (not --extra-index-url) replaces PyPI so pip cannot fall back to
+# the CPU manylinux wheel cached from a prior run. When the main install then
+# resolves torch==2.8.*, it is already satisfied by the CUDA build and vllm's
+# dep resolver does not reinstall the CPU variant.
+if [[ -n "$PYTORCH_WHEEL_INDEX" && "$REPT_SKIP_TORCH_INSTALL" != "1" ]]; then
+    echo ">>> Pre-installing CUDA torch from $PYTORCH_WHEEL_INDEX ..."
+    pip install --no-cache-dir "torch==2.8.*" \
+        --index-url "$PYTORCH_WHEEL_INDEX"
+fi
+
 echo ">>> Installing dependencies..."
 REQ_TO_INSTALL="$REPT_REQUIREMENTS_FILE"
 if [[ "$REPT_SKIP_TORCH_INSTALL" == "1" ]]; then

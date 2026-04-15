@@ -7,10 +7,12 @@
 #   pip install -r requirements.lambda.txt \
 #       --extra-index-url https://download.pytorch.org/whl/cu128
 #
-# With bootstrap_lambda.sh:
+# With bootstrap_lambda.sh (GH200 / CUDA 12.8):
 #   export REPT_REQUIREMENTS_FILE="$REPT_ROOT/requirements.lambda.txt"
 #   export PYTORCH_WHEEL_INDEX="https://download.pytorch.org/whl/cu128"
+#   export REPT_SKIP_TORCH_INSTALL=0   # must be 0 so bootstrap pre-installs CUDA torch
 #   bash scripts/bootstrap_lambda.sh
+# For p5.4xlarge H100 (CUDA 12.1): use cu121 index and set REPT_SKIP_TORCH_INSTALL=0.
 
 # ---- Deep learning runtime ----
 torch==2.8.*
