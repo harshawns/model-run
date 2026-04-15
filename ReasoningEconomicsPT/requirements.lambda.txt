@@ -1,5 +1,5 @@
 # Lambda Cloud GPU — pinned stack for GRPO + TRL environment_factory + vLLM.
-# GH200/aarch64: PyTorch skipped 2.8 for ARM64 CUDA builds; use torch 2.7.* + vllm 0.9.1.
+# GH200/aarch64: PyTorch skipped 2.8 for ARM64 CUDA builds; use torch 2.9.* + vllm 0.11.2.
 # x86_64 (p5.4xlarge H100, CUDA 12.1): see requirements.carc-cu121.txt (torch 2.8.* is available there).
 #
 # Install (GH200 / CUDA 12.8):
@@ -14,12 +14,12 @@
 #   bash scripts/bootstrap_lambda.sh
 
 # ---- Deep learning runtime ----
-torch==2.7.*
-# vllm 0.9.1 is compiled against numpy 1.x; numpy 2.x breaks numpy.core ABI.
-numpy>=1.26,<2
+torch==2.9.*
+# vllm 0.11.2 requires numpy 2.x (compiled against numpy 2.x ABI).
+numpy>=2.0
 
 # ---- Inference / generation ----
-vllm==0.9.1
+vllm==0.11.2
 
 # ---- Core training stack ----
 openenv-core[core]==0.2.*
