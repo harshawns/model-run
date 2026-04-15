@@ -1,6 +1,8 @@
 # Lambda Cloud GPU — pinned stack for GRPO + TRL environment_factory + vLLM.
 # GH200/aarch64: PyTorch skipped 2.8 for ARM64 CUDA builds; use torch 2.10.* + vllm 0.19.0.
-# vllm 0.11.x requires transformers<5 (incompatible with trl 1.0.0 + transformers 5.x).
+# All vllm versions >=0.11 require transformers<5. CARC (x86_64) uses vllm 0.10.2 which
+# had no transformers upper bound and works with transformers==5.3.0. GH200 cannot use
+# vllm 0.10.2 (no aarch64 CUDA torch 2.8 wheel), so transformers is pinned to <5 here.
 # x86_64 (p5.4xlarge H100, CUDA 12.1): see requirements.carc-cu121.txt (torch 2.8.* is available there).
 #
 # Install (GH200 / CUDA 12.8):
@@ -26,8 +28,8 @@ vllm==0.19.0
 openenv-core[core]==0.2.*
 trl==1.0.0
 jmespath>=1.0.1
-# transformers>=5.2.0, <5.4
-transformers==5.3.0
+# transformers<5 required by vllm>=0.11; let pip resolve to latest 4.x compatible with trl
+transformers>=4.56.0,<5
 datasets>=4.7.0
 accelerate>=1.4.0
 
