@@ -517,6 +517,7 @@ The easiest path is to start from:
 Recommended GH200 flow:
 
 ```bash
+cd /home/ubuntu/csci-544/model-run
 cp gh200.lambda.env.example gh200.lambda.env
 source ./gh200.lambda.env
 ./bootstrap_p5_4xlarge_h100_lambda.sh
