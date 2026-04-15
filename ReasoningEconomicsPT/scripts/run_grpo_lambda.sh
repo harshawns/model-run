@@ -54,6 +54,8 @@ usage() {
     echo "  REPT_INSTALL_DEPS_ON_RUN  default: 0 (set to 1 to pip install before run)"
     echo "  REPT_REQUIREMENTS_FILE    default: <REPT_ROOT>/requirements.lambda.txt"
     echo "  PYTORCH_WHEEL_INDEX       optional pip extra index URL"
+    echo "  REPT_MAX_TOKENS_PER_STEP  default: REPT_MAX_COMPLETION_LENGTH"
+    echo "  REPT_DEFAULT_BUDGET_MODE  default: soft"
     echo "  REPT_REWARD_LOG_PATH  default: <REPT_OUTPUT_DIR>/reward_log.jsonl"
     exit 1
 }
@@ -108,6 +110,8 @@ REPT_LOG_EVERY="${REPT_LOG_EVERY:-1}"
 REPT_INSTALL_DEPS_ON_RUN="${REPT_INSTALL_DEPS_ON_RUN:-0}"
 REPT_REQUIREMENTS_FILE="${REPT_REQUIREMENTS_FILE:-$REPT_ROOT/requirements.lambda.txt}"
 PYTORCH_WHEEL_INDEX="${PYTORCH_WHEEL_INDEX:-}"
+REPT_MAX_TOKENS_PER_STEP="${REPT_MAX_TOKENS_PER_STEP:-$REPT_MAX_COMPLETION_LENGTH}"
+REPT_DEFAULT_BUDGET_MODE="${REPT_DEFAULT_BUDGET_MODE:-soft}"
 REPT_REWARD_LOG_PATH="${REPT_REWARD_LOG_PATH:-$REPT_OUTPUT_DIR/reward_log.jsonl}"
 
 if [[ -n "${REPT_VLLM_MAX_MODEL_LEN:-}" ]]; then
@@ -367,6 +371,8 @@ COMMON_ARGS=(
     --vllm_server_port "$REPT_VLLM_PORT"
     --vllm_group_port "$REPT_VLLM_GROUP_PORT"
     --max_completion_length "$REPT_MAX_COMPLETION_LENGTH"
+    --max_tokens_per_step "$REPT_MAX_TOKENS_PER_STEP"
+    --default_budget_mode "$REPT_DEFAULT_BUDGET_MODE"
     --output_dir "$REPT_OUTPUT_DIR"
     --reward_log_path "$REPT_REWARD_LOG_PATH"
 )

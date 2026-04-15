@@ -14,6 +14,9 @@ echo "=== OpenEnv Server Wrapper ==="
 echo "  ENV_ROOT                     = $ENV_ROOT"
 echo "  ENV_VENV                     = $ENV_VENV"
 echo "  REASON_BUDGET_NUM_QUESTIONS  = $REASON_BUDGET_NUM_QUESTIONS"
+echo "  REASON_BUDGET_HARD_CAP_MODE  = $REASON_BUDGET_HARD_CAP_MODE"
+echo "  REASON_BUDGET_BUDGET_RATIO   = $REASON_BUDGET_BUDGET_RATIO"
+echo "  REASON_BUDGET_TOKENIZER_NAME = $REASON_BUDGET_TOKENIZER_NAME"
 echo "  Host / Port                  = $ENV_HOST:$ENV_PORT"
 echo ""
 
@@ -23,5 +26,4 @@ if [[ -f "$ENV_VENV/bin/activate" ]]; then
     source "$ENV_VENV/bin/activate"
 fi
 
-REASON_BUDGET_NUM_QUESTIONS="$REASON_BUDGET_NUM_QUESTIONS" \
 uvicorn server.app:app --host "$ENV_HOST" --port "$ENV_PORT"
