@@ -502,14 +502,16 @@ Practical guidance for this repo:
 If you run this bundle on a Lambda `GH200 (96 GB)` instance instead of an H100 box:
 
 - use `Lambda Stack 22.04`
-- prefer a venv created with `--system-site-packages`
-- skip reinstalling the pinned `torch` wheel and reuse the image's system torch
+- use an isolated PT venv (`REPT_VENV_SYSTEM_SITE_PACKAGES=0`)
+- install CUDA-enabled `torch` from the PyTorch wheel index before `vllm` can pull a CPU wheel
+- keep `numpy<2` because `vllm==0.10.2` is compiled against the NumPy 1.x ABI
 
 The PT bootstrap script supports this through:
 
 - `REPT_PYTHON_BIN=auto` (auto-detects a CUDA-capable Python on GH200)
-- `REPT_VENV_SYSTEM_SITE_PACKAGES=1`
-- `REPT_SKIP_TORCH_INSTALL=1`
+- `REPT_VENV_SYSTEM_SITE_PACKAGES=0`
+- `REPT_SKIP_TORCH_INSTALL=0`
+- `PYTORCH_WHEEL_INDEX=https://download.pytorch.org/whl/cu128`
 
 The easiest path is to start from:
 

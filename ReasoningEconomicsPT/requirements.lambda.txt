@@ -2,19 +2,20 @@
 # Aligned with impl-context/v2.1-impl.md and cross-chat-completion.md (same versions
 # as requirements.carc-cu121.txt: torch 2.8.* + vLLM 0.10.2 + trl 1.0.0 + transformers>=5.2.0).
 #
-# Install (recommended with PyTorch CUDA wheels):
+# Install (recommended with PyTorch CUDA wheels for GH200 / CUDA 12.8):
 #   pip install --upgrade pip
 #   pip install -r requirements.lambda.txt \
-#       --extra-index-url https://download.pytorch.org/whl/cu121
+#       --extra-index-url https://download.pytorch.org/whl/cu128
 #
 # With bootstrap_lambda.sh:
 #   export REPT_REQUIREMENTS_FILE="$REPT_ROOT/requirements.lambda.txt"
-#   export PYTORCH_WHEEL_INDEX="https://download.pytorch.org/whl/cu121"
+#   export PYTORCH_WHEEL_INDEX="https://download.pytorch.org/whl/cu128"
 #   bash scripts/bootstrap_lambda.sh
 
 # ---- Deep learning runtime ----
 torch==2.8.*
-numpy>=1.26
+# vllm 0.10.2 is compiled against numpy 1.x; numpy 2.x breaks numpy.core ABI.
+numpy>=1.26,<2
 
 # ---- Inference / generation ----
 vllm==0.10.2
