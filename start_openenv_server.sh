@@ -26,4 +26,6 @@ if [[ -f "$ENV_VENV/bin/activate" ]]; then
     source "$ENV_VENV/bin/activate"
 fi
 
+export PYTHONPATH="$ENV_ROOT${PYTHONPATH:+:$PYTHONPATH}"
+
 uvicorn server.app:app --host "$ENV_HOST" --port "$ENV_PORT"
