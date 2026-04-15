@@ -510,6 +510,22 @@ The PT bootstrap script supports this through:
 - `REPT_VENV_SYSTEM_SITE_PACKAGES=1`
 - `REPT_SKIP_TORCH_INSTALL=1`
 
+The easiest path is to start from:
+
+- [gh200.lambda.env.example](/Users/harshawnsingh/Desktop/csci-544/project/model-run/gh200.lambda.env.example)
+
+Recommended GH200 flow:
+
+```bash
+cp gh200.lambda.env.example gh200.lambda.env
+source ./gh200.lambda.env
+./bootstrap_p5_4xlarge_h100_lambda.sh
+./start_openenv_server.sh
+./preflight_p5_4xlarge_h100_lambda.sh
+./run_p5_4xlarge_h100_lambda.sh --dry-run
+./run_p5_4xlarge_h100_lambda.sh
+```
+
 ## Reward Log Analysis
 
 For quick reward-log diagnostics after a run:
