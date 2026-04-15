@@ -507,6 +507,7 @@ If you run this bundle on a Lambda `GH200 (96 GB)` instance instead of an H100 b
 
 The PT bootstrap script supports this through:
 
+- `REPT_PYTHON_BIN=auto` (auto-detects a CUDA-capable Python on GH200)
 - `REPT_VENV_SYSTEM_SITE_PACKAGES=1`
 - `REPT_SKIP_TORCH_INSTALL=1`
 
@@ -520,7 +521,9 @@ Recommended GH200 flow:
 cd /home/ubuntu/csci-544/model-run
 cp gh200.lambda.env.example gh200.lambda.env
 source ./gh200.lambda.env
+rm -rf "$REPT_VENV"
 ./bootstrap_p5_4xlarge_h100_lambda.sh
+./bootstrap_openenv_server.sh
 ./start_openenv_server.sh
 ./preflight_p5_4xlarge_h100_lambda.sh
 ./run_p5_4xlarge_h100_lambda.sh --dry-run
