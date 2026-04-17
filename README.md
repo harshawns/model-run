@@ -82,6 +82,33 @@ This profile defaults to:
 This profile is tuned for first H100 episode-mode validation with `Qwen/Qwen3-1.7B`
 before scaling to `Qwen/Qwen3-14B`.
 
+### Recommended for `2x H100`
+
+Use:
+
+- [2x_h100.lambda.env.example](/Users/harshawnsingh/Desktop/csci-544/project/model-run/2x_h100.lambda.env.example)
+
+This profile defaults to:
+
+- `REPT_MODEL=Qwen/Qwen3-8B`
+- `REPT_NUM_GENERATIONS=4`
+- `REPT_BATCH_SIZE=4`
+- `REPT_VLLM_MODE=server`
+- `REPT_VLLM_TP=1`
+- `REPT_VLLM_GPU_UTIL=0.80`
+- `REPT_VLLM_MAX_MODEL_LEN=4096`
+- `REPT_MAX_COMPLETION_LENGTH=2048`
+- `REASON_BUDGET_NUM_QUESTIONS=10`
+
+The launcher uses a split layout:
+
+- GPU `0`: GRPO training
+- GPU `1`: `trl vllm-serve`
+
+Do not set `REPT_VLLM_TP=2` on a two-GPU box with this launcher. Server mode
+needs at least one GPU left for training, so `2x H100` should use
+`REPT_VLLM_TP=1`.
+
 ### Kept for reference only: `Qwen/Qwen3-32B`
 
 Use only if you move to a larger-memory or multi-GPU setup:
@@ -103,18 +130,26 @@ So a single `80 GB` H100 is not where I would try to run `Qwen3-32B` in this rep
   Reference-only env file for a larger-memory or multi-GPU 32B run.
 - [p5_4xlarge_h100.lambda.env.example](/Users/harshawnsingh/Desktop/csci-544/project/model-run/p5_4xlarge_h100.lambda.env.example)
   Recommended single-H100 env file.
+- [2x_h100.lambda.env.example](/Users/harshawnsingh/Desktop/csci-544/project/model-run/2x_h100.lambda.env.example)
+  Recommended two-H100 server-mode env file.
 - [_common.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/_common.sh)
   Shared defaults used by the wrappers.
 - [bootstrap_p5_4xlarge_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/bootstrap_p5_4xlarge_h100_lambda.sh)
   One-time dependency/bootstrap wrapper.
+- [bootstrap_2x_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/bootstrap_2x_h100_lambda.sh)
+  Two-H100 bootstrap wrapper alias.
 - [preflight_p5_4xlarge_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/preflight_p5_4xlarge_h100_lambda.sh)
   Sanity checks before launch.
+- [preflight_2x_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/preflight_2x_h100_lambda.sh)
+  Two-H100 sanity checks before launch.
 - [start_openenv_server.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/start_openenv_server.sh)
   Starts the local env server in V1 mode.
 - [scout_p5_4xlarge_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/scout_p5_4xlarge_h100_lambda.sh)
   Runs seed scouting for the larger model.
 - [run_p5_4xlarge_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/run_p5_4xlarge_h100_lambda.sh)
   Launches the full training run.
+- [run_2x_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/run_2x_h100_lambda.sh)
+  Launches the full two-H100 server-mode training run.
 
 ## Default Assumptions
 
@@ -129,16 +164,16 @@ The default wrapper profile in [_common.sh](/Users/harshawnsingh/Desktop/csci-54
 - `REPT_VLLM_MODE=colocate`
 - `REPT_VLLM_GPU_UTIL=0.25`
 - `REPT_VLLM_TP=1`
-- `REPT_MAX_COMPLETION_LENGTH=1024`
+- `REPT_MAX_COMPLETION_LENGTH=2048`
 - `REPT_REQUIREMENTS_FILE=$REPT_ROOT/requirements.lambda.txt`
 - `ENV_BASE_URL=http://127.0.0.1:8010`
-- `REASON_BUDGET_NUM_QUESTIONS=4`
+- `REASON_BUDGET_NUM_QUESTIONS=10`
 
 These defaults are deliberate:
 
 1. `batch_size` must be divisible by `num_generations` for GRPO.
 2. the current `code` PT path is rollout-based and episode-oriented by default.
-3. `1024` is the bundle starting point for 4-question runs, but GPU runs may need 1280–1536 depending on vLLM pressure.
+3. `2048` is the bundle starting point for 10-question runs, but GPU runs may need 2560–3072 depending on vLLM pressure.
 4. all-50 prompts is the current simple bundle baseline.
 5. `num_generations=4` is a practical first single-GPU setting.
 
@@ -226,6 +261,58 @@ What this checks:
 
 If preflight fails, do not start training yet.
 
+## 2x H100 Quick Start
+
+Use this flow on a two-H100 machine.
+
+```bash
+cd /home/ubuntu/csci-544/model-run
+cp 2x_h100.lambda.env.example 2x_h100.lambda.env
+```
+
+Edit `2x_h100.lambda.env`:
+
+- keep `REPT_FS_NAME=csci-544` if that is your Lambda filesystem name; otherwise change it
+- keep `REPT_VLLM_MODE=server`
+- keep `REPT_VLLM_TP=1`
+- start with `REPT_MODEL=Qwen/Qwen3-8B`
+
+Then bootstrap:
+
+```bash
+source ./2x_h100.lambda.env
+export REPT_RECREATE_VENV=1
+./bootstrap_2x_h100_lambda.sh
+./bootstrap_openenv_server.sh
+```
+
+Start the env server in one shell:
+
+```bash
+cd /home/ubuntu/csci-544/model-run
+source ./2x_h100.lambda.env
+./start_openenv_server.sh
+```
+
+In a second shell:
+
+```bash
+cd /home/ubuntu/csci-544/model-run
+source ./2x_h100.lambda.env
+./preflight_2x_h100_lambda.sh
+./run_2x_h100_lambda.sh --dry-run
+./run_2x_h100_lambda.sh
+```
+
+After the run:
+
+```bash
+cd "$REPT_ROOT"
+source "$REPT_VENV/bin/activate"
+python scripts/summarize_episode_run.py "$REPT_REWARD_LOG_PATH"
+cat "$(dirname "$REPT_REWARD_LOG_PATH")/episode_summary.md"
+```
+
 ## Running The Env Server
 
 You have two choices.
@@ -246,7 +333,7 @@ Defaults:
 - `ENV_VENV` defaults to `$ENV_ROOT/.venv-server`
 - host defaults to `127.0.0.1`
 - port defaults to `8010`
-- `REASON_BUDGET_NUM_QUESTIONS=4`
+- `REASON_BUDGET_NUM_QUESTIONS=10`
 
 If your env fork or venv lives somewhere else, export:
 
