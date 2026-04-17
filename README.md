@@ -289,6 +289,8 @@ export REPT_RECREATE_VENV=1
 ./bootstrap_openenv_server.sh
 ```
 
+The Lambda PT requirements pin `vllm==0.17.1` for the 2x H100 server-mode path because TRL 1.0.0 warns on newer vLLM server versions.
+
 Start the env server in one shell:
 
 ```bash
@@ -594,7 +596,7 @@ If you run this bundle on a Lambda `GH200 (96 GB)` instance instead of an H100 b
 - use `Lambda Stack 22.04`
 - use an isolated PT venv (`REPT_VENV_SYSTEM_SITE_PACKAGES=0`)
 - install CUDA-enabled `torch` from the PyTorch wheel index before `vllm` can pull a CPU wheel
-- keep `numpy<2` because `vllm==0.10.2` is compiled against the NumPy 1.x ABI
+- keep the Lambda PT stack pinned through `requirements.lambda.txt`; the GH200/aarch64 path uses `torch==2.10.*`, `vllm==0.17.1`, and NumPy 2.x
 
 The PT bootstrap script supports this through:
 

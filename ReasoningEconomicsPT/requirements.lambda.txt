@@ -1,5 +1,6 @@
 # Lambda Cloud GPU — pinned stack for GRPO + TRL environment_factory + vLLM.
-# GH200/aarch64: PyTorch skipped 2.8 for ARM64 CUDA builds; use torch 2.10.* + vllm 0.19.0.
+# GH200/aarch64: PyTorch skipped 2.8 for ARM64 CUDA builds; use torch 2.10.*.
+# Keep vLLM within TRL 1.0.0's supported server range (0.10.2 through 0.17.1).
 # All vllm versions >=0.11 require transformers<5. CARC (x86_64) uses vllm 0.10.2 which
 # had no transformers upper bound and works with transformers==5.3.0. GH200 cannot use
 # vllm 0.10.2 (no aarch64 CUDA torch 2.8 wheel), so transformers is pinned to <5 here.
@@ -18,11 +19,11 @@
 
 # ---- Deep learning runtime ----
 torch==2.10.*
-# vllm 0.19.0 requires numpy 2.x (compiled against numpy 2.x ABI).
+# vllm 0.17.1 works with the NumPy 2.x stack used by the GH200/aarch64 wheels.
 numpy>=2.0
 
 # ---- Inference / generation ----
-vllm==0.19.0
+vllm==0.17.1
 
 # ---- Core training stack ----
 openenv-core[core]==0.2.*
