@@ -24,6 +24,9 @@ numpy>=2.0
 
 # ---- Inference / generation ----
 vllm==0.17.1
+# vllm 0.17.1 pulls flashinfer-python 0.6.4; pin cubins too so downgrades
+# from newer vLLM stacks do not leave a mismatched flashinfer-cubin package.
+flashinfer-cubin==0.6.4
 
 # ---- Core training stack ----
 openenv-core[core]==0.2.*
