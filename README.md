@@ -91,10 +91,10 @@ Use:
 This profile defaults to a small one-epoch smoke run:
 
 - `REPT_MODEL=Qwen/Qwen3-1.7B`
-- `REPT_NUM_GENERATIONS=4`
-- `REPT_BATCH_SIZE=4`
+- `REPT_NUM_GENERATIONS=2`
+- `REPT_BATCH_SIZE=2`
 - `REPT_GRAD_ACCUM=1`
-- `REPT_N_PROMPTS=8`
+- `REPT_N_PROMPTS=1`
 - `REPT_VLLM_MODE=server`
 - `REPT_VLLM_TP=1`
 - `REPT_VLLM_GPU_UTIL=0.35`
