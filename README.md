@@ -95,6 +95,7 @@ This profile defaults to a small one-epoch smoke run:
 - `REPT_BATCH_SIZE=2`
 - `REPT_GRAD_ACCUM=1`
 - `REPT_N_PROMPTS=1`
+- `REPT_MAX_EPISODE_TURNS=12`
 - `REPT_VLLM_MODE=server`
 - `REPT_VLLM_TP=1`
 - `REPT_VLLM_GPU_UTIL=0.35`
