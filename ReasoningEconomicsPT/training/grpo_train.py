@@ -592,6 +592,7 @@ def main():
 
     parser = argparse.ArgumentParser(description="GRPO training against remote OpenEnv env")
     parser.add_argument("--model", type=str, default="Qwen/Qwen3-0.6B")
+    parser.add_argument("--n_prompts", type=int, default=100)
     parser.add_argument("--num_train_epochs", type=int, default=1)
     parser.add_argument("--num_generations", type=int, default=8)
     parser.add_argument("--max_completion_length", type=int, default=4096)
@@ -738,6 +739,9 @@ def main():
         f"chat_template_kwargs={merged_chat_template_kwargs!r}"
     )
 
+    if args.n_prompts < 1:
+        raise SystemExit(f"--n_prompts must be >= 1 (got {args.n_prompts})")
+
     dataset = Dataset.from_dict({
         "prompt": [
             [
@@ -745,7 +749,7 @@ def main():
                 {"role": "user", "content": "Solve the next math problem under budget constraints."},
             ]
         ]
-        * 100
+        * args.n_prompts
     })
 
     grpo_config = GRPOConfig(

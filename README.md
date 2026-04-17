@@ -88,16 +88,18 @@ Use:
 
 - [2x_h100.lambda.env.example](/Users/harshawnsingh/Desktop/csci-544/project/model-run/2x_h100.lambda.env.example)
 
-This profile defaults to:
+This profile defaults to a small one-epoch smoke run:
 
-- `REPT_MODEL=Qwen/Qwen3-8B`
+- `REPT_MODEL=Qwen/Qwen3-1.7B`
 - `REPT_NUM_GENERATIONS=4`
 - `REPT_BATCH_SIZE=4`
+- `REPT_GRAD_ACCUM=1`
+- `REPT_N_PROMPTS=8`
 - `REPT_VLLM_MODE=server`
 - `REPT_VLLM_TP=1`
 - `REPT_VLLM_GPU_UTIL=0.80`
 - `REPT_VLLM_MAX_MODEL_LEN=4096`
-- `REPT_MAX_COMPLETION_LENGTH=2048`
+- `REPT_MAX_COMPLETION_LENGTH=1024`
 - `REASON_BUDGET_NUM_QUESTIONS=10`
 
 The launcher uses a split layout:
@@ -275,7 +277,7 @@ Edit `2x_h100.lambda.env`:
 - keep `REPT_FS_NAME=csci-544` if that is your Lambda filesystem name; otherwise change it
 - keep `REPT_VLLM_MODE=server`
 - keep `REPT_VLLM_TP=1`
-- start with `REPT_MODEL=Qwen/Qwen3-8B`
+- start with `REPT_MODEL=Qwen/Qwen3-1.7B`
 
 Then bootstrap:
 
