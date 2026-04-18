@@ -39,13 +39,14 @@ usage() {
     echo "  REPT_GRAD_ACCUM_OVERRIDE  set to any value to skip grad-accum auto-tune"
     echo "  REPT_NUM_GPUS         default: auto (nvidia-smi count)"
     echo "  REPT_VLLM_MODE        default: auto (server if >=2 GPUs, else colocate)"
-    echo "  REPT_VLLM_TP          default: 1 (vLLM tensor parallel GPUs in server mode)"
+    echo "  REPT_VLLM_TP          default: 1 (vLLM tensor parallel GPUs)"
+    echo "  REPT_COLOCATE_TRAIN_PROCS  default: 1 (experimental: >1 uses accelerate in colocate mode)"
     echo "  REPT_VLLM_PORT        default: 8001 (trl vllm-serve HTTP; must differ from OpenEnv, often 8000)"
     echo "  REPT_VLLM_GROUP_PORT  default: 51216 (TRL weight-sync TCP; match training --vllm_group_port)"
     echo "  REPT_VLLM_SERVER_HOST default: 127.0.0.1 (passed to grpo_train --vllm_server_host)"
     echo "  REPT_NCCL_P2P_DISABLE optional: if set, overrides NCCL_P2P_DISABLE for multi-GPU (else 1; use 0 on NVLink A100)"
     echo "  REPT_VLLM_GPU_UTIL    default: 0.9"
-    echo "  REPT_VLLM_MAX_MODEL_LEN optional: positive int → trl vllm-serve --max_model_len (server mode only; caps KV / context)"
+    echo "  REPT_VLLM_MAX_MODEL_LEN optional: positive int → caps vLLM context/KV"
     echo "  REPT_GRADIENT_CHECKPOINTING  default: 1"
     echo "  REPT_MAX_COMPLETION_LENGTH   default: 4096"
     echo "  REPT_MAX_EPISODE_TURNS       default: 256"
@@ -100,6 +101,11 @@ REPT_NUM_GPUS="${REPT_NUM_GPUS:-auto}"
 REPT_VLLM_TP="${REPT_VLLM_TP:-1}"
 if ! [[ "$REPT_VLLM_TP" =~ ^[0-9]+$ ]] || [[ "$REPT_VLLM_TP" -lt 1 ]]; then
     echo "[ERROR] REPT_VLLM_TP must be a positive integer (got: $REPT_VLLM_TP)"
+    exit 1
+fi
+REPT_COLOCATE_TRAIN_PROCS="${REPT_COLOCATE_TRAIN_PROCS:-1}"
+if ! [[ "$REPT_COLOCATE_TRAIN_PROCS" =~ ^[0-9]+$ ]] || [[ "$REPT_COLOCATE_TRAIN_PROCS" -lt 1 ]]; then
+    echo "[ERROR] REPT_COLOCATE_TRAIN_PROCS must be a positive integer (got: $REPT_COLOCATE_TRAIN_PROCS)"
     exit 1
 fi
 REPT_VLLM_GPU_UTIL="${REPT_VLLM_GPU_UTIL:-0.9}"
@@ -163,7 +169,14 @@ if [[ "$REPT_VLLM_MODE" == "server" ]]; then
         exit 1
     fi
 else
-    TRAIN_PROCS=1
+    TRAIN_PROCS="$REPT_COLOCATE_TRAIN_PROCS"
+    if [[ "$TRAIN_PROCS" -gt "$REPT_NUM_GPUS" ]]; then
+        echo "[ERROR] REPT_COLOCATE_TRAIN_PROCS ($TRAIN_PROCS) exceeds visible GPU count ($REPT_NUM_GPUS)"
+        exit 1
+    fi
+    if [[ "$TRAIN_PROCS" -gt 1 ]]; then
+        echo "  [WARN] Experimental colocate multi-process training: vLLM shares the training GPUs."
+    fi
 fi
 
 TARGET_EFFECTIVE_PROMPTS=16
@@ -265,9 +278,9 @@ for mod in torch vllm trl transformers datasets huggingface_hub openenv jmespath
     fi
 done
 
-if [[ "$REPT_VLLM_MODE" == "server" ]]; then
+if [[ "$REPT_VLLM_MODE" == "server" || "$TRAIN_PROCS" -gt 1 ]]; then
     if ! command -v accelerate >/dev/null 2>&1; then
-        echo "  [FAIL] accelerate CLI not on PATH (required for vllm_mode=server)"
+        echo "  [FAIL] accelerate CLI not on PATH (required for server mode or multi-process training)"
         exit 1
     fi
     echo "  [PASS] accelerate CLI available"
@@ -395,6 +408,9 @@ COMMON_ARGS=(
 if [[ -n "$ENV_TOKENIZER_ARG" ]]; then
     COMMON_ARGS+=(--env_tokenizer_name "$ENV_TOKENIZER_ARG")
 fi
+if [[ -n "${REPT_VLLM_MAX_MODEL_LEN:-}" ]]; then
+    COMMON_ARGS+=(--vllm_max_model_len "$REPT_VLLM_MAX_MODEL_LEN")
+fi
 
 if [[ "${REPT_GRADIENT_CHECKPOINTING:-0}" == "1" ]]; then
     COMMON_ARGS+=(--gradient_checkpointing)
@@ -408,9 +424,14 @@ if [[ "${REPT_DEBUG_ROLLOUT:-0}" == "1" ]]; then
     COMMON_ARGS+=(--debug_rollout --rollout_debug_path "$REPT_ROLLOUT_DEBUG_PATH")
 fi
 
+TRAIN_ENV=()
 if [[ "$REPT_VLLM_MODE" == "server" ]]; then
+    TRAIN_ENV=(env CUDA_VISIBLE_DEVICES="$TRAIN_CUDA_DEVS")
+fi
+
+if [[ "$REPT_VLLM_MODE" == "server" || "$TRAIN_PROCS" -gt 1 ]]; then
     TRAIN_CMD=(
-        env CUDA_VISIBLE_DEVICES="$TRAIN_CUDA_DEVS"
+        "${TRAIN_ENV[@]}"
         accelerate launch
         --num_processes "$TRAIN_PROCS"
         --main_process_port "${REPT_ACCELERATE_MAIN_PORT:-29500}"

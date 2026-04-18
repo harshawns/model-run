@@ -825,6 +825,12 @@ def main():
         help="GPU memory fraction for vLLM (server mode).",
     )
     parser.add_argument(
+        "--vllm_max_model_len",
+        type=int,
+        default=None,
+        help="Optional vLLM max model length/context cap; forwarded when supported by TRL.",
+    )
+    parser.add_argument(
         "--vllm_server_host",
         type=str,
         default="127.0.0.1",
@@ -975,27 +981,39 @@ def main():
         * args.n_prompts
     })
 
-    grpo_config = GRPOConfig(
-        output_dir=args.output_dir,
-        use_vllm=True,
-        vllm_mode=args.vllm_mode,
-        vllm_tensor_parallel_size=args.vllm_tensor_parallel_size,
-        vllm_gpu_memory_utilization=args.vllm_gpu_memory_utilization,
-        vllm_server_host=args.vllm_server_host,
-        vllm_server_port=args.vllm_server_port,
-        vllm_group_port=args.vllm_group_port,
-        num_train_epochs=args.num_train_epochs,
-        num_generations=args.num_generations,
-        max_completion_length=args.max_completion_length,
-        per_device_train_batch_size=args.per_device_train_batch_size,
-        gradient_accumulation_steps=args.gradient_accumulation_steps,
-        learning_rate=args.learning_rate,
-        gradient_checkpointing=args.gradient_checkpointing,
-        bf16=not args.no_bf16,
-        logging_steps=1,
-        save_strategy="epoch",
-        chat_template_kwargs=merged_chat_template_kwargs,
-    )
+    grpo_kwargs = {
+        "output_dir": args.output_dir,
+        "use_vllm": True,
+        "vllm_mode": args.vllm_mode,
+        "vllm_tensor_parallel_size": args.vllm_tensor_parallel_size,
+        "vllm_gpu_memory_utilization": args.vllm_gpu_memory_utilization,
+        "vllm_server_host": args.vllm_server_host,
+        "vllm_server_port": args.vllm_server_port,
+        "vllm_group_port": args.vllm_group_port,
+        "num_train_epochs": args.num_train_epochs,
+        "num_generations": args.num_generations,
+        "max_completion_length": args.max_completion_length,
+        "per_device_train_batch_size": args.per_device_train_batch_size,
+        "gradient_accumulation_steps": args.gradient_accumulation_steps,
+        "learning_rate": args.learning_rate,
+        "gradient_checkpointing": args.gradient_checkpointing,
+        "bf16": not args.no_bf16,
+        "logging_steps": 1,
+        "save_strategy": "epoch",
+        "chat_template_kwargs": merged_chat_template_kwargs,
+    }
+    if args.vllm_max_model_len is not None:
+        import inspect
+
+        if "vllm_max_model_length" in inspect.signature(GRPOConfig).parameters:
+            grpo_kwargs["vllm_max_model_length"] = args.vllm_max_model_len
+        else:
+            print(
+                "[WARN] Installed TRL GRPOConfig does not expose vllm_max_model_length; "
+                "ignoring --vllm_max_model_len.",
+                flush=True,
+            )
+    grpo_config = GRPOConfig(**grpo_kwargs)
 
     trainer = GRPOTrainer(
         model=args.model,
