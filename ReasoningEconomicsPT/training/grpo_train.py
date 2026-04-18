@@ -917,6 +917,16 @@ def main():
         ),
     )
     parser.add_argument(
+        "--max_steps",
+        type=int,
+        default=-1,
+        help=(
+            "Total training steps passed to GRPOConfig. Required when FSDP is active: "
+            "TRL wraps the dataset as IterableDataset (no __len__) and Transformers Trainer "
+            "requires max_steps when the dataloader has no length."
+        ),
+    )
+    parser.add_argument(
         "--fsdp",
         type=str,
         default=None,
@@ -1025,6 +1035,8 @@ def main():
         "save_strategy": "epoch",
         "chat_template_kwargs": merged_chat_template_kwargs,
     }
+    if args.max_steps > 0:
+        grpo_kwargs["max_steps"] = args.max_steps
     if args.vllm_max_model_len is not None:
         import inspect
 

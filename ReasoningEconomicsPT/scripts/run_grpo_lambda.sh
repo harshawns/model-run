@@ -465,6 +465,15 @@ if [[ "$REPT_SHARDING_BACKEND" == "fsdp" ]]; then
     fi
     COMMON_ARGS+=(--fsdp "full_shard auto_wrap")
     COMMON_ARGS+=(--fsdp_config "{\"fsdp_transformer_layer_cls_to_wrap\":\"${REPT_FSDP_AUTO_WRAP_LAYER}\",\"fsdp_offload_params\":false,\"fsdp_sharding_strategy\":\"${REPT_FSDP_SHARDING_STRATEGY}\",\"activation_checkpointing\":${_FSDP_ACT_CKPT}}")
+    # FSDP + rollout_func path: TRL wraps the dataset as IterableDataset (no __len__).
+    # Transformers Trainer then requires max_steps; compute from n_prompts and batch geometry.
+    # prompts_per_step = (batch_size / num_generations) * TRAIN_PROCS
+    _PROMPTS_PER_STEP=$(( (REPT_BATCH_SIZE / REPT_NUM_GENERATIONS) * TRAIN_PROCS ))
+    if [[ "$_PROMPTS_PER_STEP" -lt 1 ]]; then _PROMPTS_PER_STEP=1; fi
+    _STEPS_PER_EPOCH=$(( (REPT_N_PROMPTS + _PROMPTS_PER_STEP - 1) / _PROMPTS_PER_STEP ))
+    _MAX_STEPS=$(( _STEPS_PER_EPOCH * REPT_NUM_EPOCHS ))
+    echo "  FSDP max_steps: n_prompts=$REPT_N_PROMPTS batch=$REPT_BATCH_SIZE gen=$REPT_NUM_GENERATIONS procs=$TRAIN_PROCS → $_MAX_STEPS"
+    COMMON_ARGS+=(--max_steps "$_MAX_STEPS")
 elif [[ "$REPT_SHARDING_BACKEND" == "deepspeed" ]]; then
     _DS_CFG="${REPT_DEEPSPEED_CONFIG:-${REPT_ROOT}/configs/deepspeed/zero3_2x_h100.json}"
     COMMON_ARGS+=(--deepspeed "$_DS_CFG")
