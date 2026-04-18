@@ -62,6 +62,12 @@ usage() {
     echo "  REPT_REWARD_LOG_PATH  default: <REPT_OUTPUT_DIR>/reward_log.jsonl"
     echo "  REPT_DEBUG_ROLLOUT    default: 0 (set to 1 for per-turn rollout debug logs)"
     echo "  REPT_ROLLOUT_DEBUG_PATH default: <REPT_OUTPUT_DIR>/rollout_debug.jsonl"
+    echo "  REPT_SHARDING_BACKEND       default: none (fsdp | deepspeed | none)"
+    echo "  REPT_FSDP_SHARDING_STRATEGY default: FULL_SHARD"
+    echo "  REPT_FSDP_AUTO_WRAP_LAYER   default: Qwen3DecoderLayer"
+    echo "  REPT_DEEPSPEED_CONFIG       optional path to ZeRO-3 JSON"
+    echo "  REPT_ACCELERATE_CONFIG      optional path to accelerate YAML"
+    echo "  REPT_VLLM_ENABLE_SLEEP_MODE default: 0 (set 1 to sleep vLLM during optimizer step)"
     exit 1
 }
 
@@ -127,6 +133,19 @@ REPT_DEFAULT_BUDGET_MODE="${REPT_DEFAULT_BUDGET_MODE:-soft}"
 REPT_REWARD_LOG_PATH="${REPT_REWARD_LOG_PATH:-$REPT_OUTPUT_DIR/reward_log.jsonl}"
 REPT_DEBUG_ROLLOUT="${REPT_DEBUG_ROLLOUT:-0}"
 REPT_ROLLOUT_DEBUG_PATH="${REPT_ROLLOUT_DEBUG_PATH:-$REPT_OUTPUT_DIR/rollout_debug.jsonl}"
+# ---- Sharding backend (FSDP / DeepSpeed) ----
+REPT_SHARDING_BACKEND="${REPT_SHARDING_BACKEND:-none}"       # none | fsdp | deepspeed
+REPT_FSDP_SHARDING_STRATEGY="${REPT_FSDP_SHARDING_STRATEGY:-FULL_SHARD}"
+REPT_FSDP_AUTO_WRAP_LAYER="${REPT_FSDP_AUTO_WRAP_LAYER:-Qwen3DecoderLayer}"
+REPT_DEEPSPEED_CONFIG="${REPT_DEEPSPEED_CONFIG:-}"           # path; auto-selects bundled config when empty
+REPT_ACCELERATE_CONFIG="${REPT_ACCELERATE_CONFIG:-}"         # explicit accelerate YAML override
+REPT_VLLM_ENABLE_SLEEP_MODE="${REPT_VLLM_ENABLE_SLEEP_MODE:-0}"
+
+if [[ "$REPT_SHARDING_BACKEND" != "none" && "$REPT_SHARDING_BACKEND" != "fsdp" && \
+      "$REPT_SHARDING_BACKEND" != "deepspeed" ]]; then
+    echo "[ERROR] REPT_SHARDING_BACKEND must be none, fsdp, or deepspeed (got: $REPT_SHARDING_BACKEND)"
+    exit 1
+fi
 
 if [[ -n "${REPT_VLLM_MAX_MODEL_LEN:-}" ]]; then
     if ! [[ "$REPT_VLLM_MAX_MODEL_LEN" =~ ^[0-9]+$ ]] || [[ "$REPT_VLLM_MAX_MODEL_LEN" -lt 1 ]]; then
@@ -177,6 +196,18 @@ else
     if [[ "$TRAIN_PROCS" -gt 1 ]]; then
         echo "  [WARN] Experimental colocate multi-process training: vLLM shares the training GPUs."
     fi
+fi
+
+if [[ "$REPT_SHARDING_BACKEND" != "none" && "$TRAIN_PROCS" -lt 2 ]]; then
+    echo "[ERROR] REPT_SHARDING_BACKEND=$REPT_SHARDING_BACKEND requires TRAIN_PROCS >= 2 (got: $TRAIN_PROCS)"
+    echo "  Set REPT_COLOCATE_TRAIN_PROCS=2 (colocate mode) or add more GPUs."
+    exit 1
+fi
+
+if [[ "$REPT_SHARDING_BACKEND" != "none" && "$REPT_VLLM_MODE" == "server" ]]; then
+    echo "[WARN] REPT_SHARDING_BACKEND=$REPT_SHARDING_BACKEND with server mode: vLLM reserves one GPU,"
+    echo "  leaving only $TRAIN_PROCS training GPU(s). FSDP/ZeRO will not reduce per-GPU memory on a 2-GPU box."
+    echo "  For sharding to help, use REPT_VLLM_MODE=colocate."
 fi
 
 TARGET_EFFECTIVE_PROMPTS=16
@@ -424,17 +455,38 @@ if [[ "${REPT_DEBUG_ROLLOUT:-0}" == "1" ]]; then
     COMMON_ARGS+=(--debug_rollout --rollout_debug_path "$REPT_ROLLOUT_DEBUG_PATH")
 fi
 
+if [[ "$REPT_SHARDING_BACKEND" == "fsdp" ]]; then
+    COMMON_ARGS+=(--fsdp "full_shard auto_wrap")
+    COMMON_ARGS+=(--fsdp_config "{\"fsdp_transformer_layer_cls_to_wrap\":\"${REPT_FSDP_AUTO_WRAP_LAYER}\",\"fsdp_offload_params\":false,\"fsdp_sharding_strategy\":\"${REPT_FSDP_SHARDING_STRATEGY}\"}")
+elif [[ "$REPT_SHARDING_BACKEND" == "deepspeed" ]]; then
+    _DS_CFG="${REPT_DEEPSPEED_CONFIG:-${REPT_ROOT}/configs/deepspeed/zero3_2x_h100.json}"
+    COMMON_ARGS+=(--deepspeed "$_DS_CFG")
+fi
+
+# Sleep mode is a colocate-only memory feature; ignore for server mode
+if [[ "${REPT_VLLM_ENABLE_SLEEP_MODE:-0}" == "1" && "$REPT_VLLM_MODE" == "colocate" ]]; then
+    COMMON_ARGS+=(--vllm_enable_sleep_mode)
+fi
+
 TRAIN_ENV=()
 if [[ "$REPT_VLLM_MODE" == "server" ]]; then
     TRAIN_ENV=(env CUDA_VISIBLE_DEVICES="$TRAIN_CUDA_DEVS")
 fi
 
 if [[ "$REPT_VLLM_MODE" == "server" || "$TRAIN_PROCS" -gt 1 ]]; then
+    ACCEL_ARGS=(
+        --num_processes "$TRAIN_PROCS"
+        --main_process_port "${REPT_ACCELERATE_MAIN_PORT:-29500}"
+    )
+    if [[ -n "$REPT_ACCELERATE_CONFIG" ]]; then
+        ACCEL_ARGS+=(--config_file "$REPT_ACCELERATE_CONFIG")
+    elif [[ "$REPT_SHARDING_BACKEND" == "fsdp" ]]; then
+        ACCEL_ARGS+=(--config_file "${REPT_ROOT}/configs/accelerate/fsdp_2x_h100.yaml")
+    fi
     TRAIN_CMD=(
         "${TRAIN_ENV[@]}"
         accelerate launch
-        --num_processes "$TRAIN_PROCS"
-        --main_process_port "${REPT_ACCELERATE_MAIN_PORT:-29500}"
+        "${ACCEL_ARGS[@]}"
         "${COMMON_ARGS[@]}"
     )
 else

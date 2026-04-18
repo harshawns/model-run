@@ -916,6 +916,29 @@ def main():
             "<output_dir>/rollout_debug.jsonl when debug is enabled."
         ),
     )
+    parser.add_argument(
+        "--fsdp",
+        type=str,
+        default=None,
+        help="FSDP strategy string passed to GRPOConfig (e.g. 'full_shard auto_wrap').",
+    )
+    parser.add_argument(
+        "--fsdp_config",
+        type=str,
+        default=None,
+        help="JSON string dict for FSDP config passed to GRPOConfig.",
+    )
+    parser.add_argument(
+        "--deepspeed",
+        type=str,
+        default=None,
+        help="Path to DeepSpeed ZeRO config JSON passed to GRPOConfig.",
+    )
+    parser.add_argument(
+        "--vllm_enable_sleep_mode",
+        action="store_true",
+        help="Enable vLLM sleep mode during optimizer step (colocate only; reduces memory pressure).",
+    )
     args = parser.parse_args()
 
     if args.per_device_train_batch_size % args.num_generations != 0:
@@ -1013,7 +1036,51 @@ def main():
                 "ignoring --vllm_max_model_len.",
                 flush=True,
             )
+    if args.fsdp is not None or args.fsdp_config is not None or args.deepspeed is not None \
+            or args.vllm_enable_sleep_mode:
+        import inspect as _inspect
+        import json as _json
+        _sig = _inspect.signature(GRPOConfig).parameters
+
+        if args.fsdp is not None:
+            if "fsdp" not in _sig:
+                raise SystemExit(
+                    "[ERROR] --fsdp was requested but installed TRL GRPOConfig does not expose 'fsdp'. "
+                    "Cannot proceed: sharding would silently fall back to plain DDP and reproduce the OOM. "
+                    "Upgrade TRL or check the installed version."
+                )
+            grpo_kwargs["fsdp"] = args.fsdp
+        if args.fsdp_config is not None:
+            if "fsdp_config" not in _sig:
+                raise SystemExit(
+                    "[ERROR] --fsdp_config was requested but GRPOConfig does not expose 'fsdp_config'."
+                )
+            grpo_kwargs["fsdp_config"] = _json.loads(args.fsdp_config)
+        if args.deepspeed is not None:
+            if "deepspeed" not in _sig:
+                raise SystemExit(
+                    "[ERROR] --deepspeed was requested but installed TRL GRPOConfig does not expose 'deepspeed'. "
+                    "Cannot proceed: sharding would silently fall back to plain DDP. "
+                    "Upgrade TRL or check the installed version."
+                )
+            grpo_kwargs["deepspeed"] = args.deepspeed
+        if args.vllm_enable_sleep_mode:
+            if "vllm_enable_sleep_mode" not in _sig:
+                raise SystemExit(
+                    "[ERROR] --vllm_enable_sleep_mode was requested but installed TRL GRPOConfig "
+                    "does not expose 'vllm_enable_sleep_mode'. Cannot proceed: colocated vLLM "
+                    "would stay resident during optimizer step and may reproduce the OOM."
+                )
+            grpo_kwargs["vllm_enable_sleep_mode"] = True
     grpo_config = GRPOConfig(**grpo_kwargs)
+    print(
+        "Sharding config:",
+        "fsdp=", getattr(grpo_config, "fsdp", None),
+        "fsdp_config=", getattr(grpo_config, "fsdp_config", None),
+        "deepspeed=", getattr(grpo_config, "deepspeed", None),
+        "vllm_sleep=", getattr(grpo_config, "vllm_enable_sleep_mode", None),
+        flush=True,
+    )
 
     trainer = GRPOTrainer(
         model=args.model,
