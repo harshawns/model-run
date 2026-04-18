@@ -1050,6 +1050,17 @@ def main():
                     "Upgrade TRL or check the installed version."
                 )
             grpo_kwargs["fsdp"] = args.fsdp
+            # When FSDP is active, activation_checkpointing is passed via fsdp_config.
+            # TrainingArguments gradient_checkpointing triggers a redundant AllGather in
+            # the backward pass under FSDP; disable it here.
+            # See: https://github.com/huggingface/transformers/issues/30404
+            if grpo_kwargs.get("gradient_checkpointing"):
+                grpo_kwargs["gradient_checkpointing"] = False
+                print(
+                    "[INFO] FSDP mode: disabling gradient_checkpointing in TrainingArguments; "
+                    "activation_checkpointing is set via fsdp_config instead.",
+                    flush=True,
+                )
         if args.fsdp_config is not None:
             if "fsdp_config" not in _sig:
                 raise SystemExit(

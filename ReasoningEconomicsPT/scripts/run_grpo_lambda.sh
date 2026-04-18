@@ -456,8 +456,15 @@ if [[ "${REPT_DEBUG_ROLLOUT:-0}" == "1" ]]; then
 fi
 
 if [[ "$REPT_SHARDING_BACKEND" == "fsdp" ]]; then
+    # When FSDP is active, activation_checkpointing in fsdp_config is correct;
+    # gradient_checkpointing in TrainingArguments triggers a redundant AllGather in backward.
+    # See: https://github.com/huggingface/transformers/issues/30404
+    _FSDP_ACT_CKPT="false"
+    if [[ "${REPT_GRADIENT_CHECKPOINTING:-1}" == "1" ]]; then
+        _FSDP_ACT_CKPT="true"
+    fi
     COMMON_ARGS+=(--fsdp "full_shard auto_wrap")
-    COMMON_ARGS+=(--fsdp_config "{\"fsdp_transformer_layer_cls_to_wrap\":\"${REPT_FSDP_AUTO_WRAP_LAYER}\",\"fsdp_offload_params\":false,\"fsdp_sharding_strategy\":\"${REPT_FSDP_SHARDING_STRATEGY}\"}")
+    COMMON_ARGS+=(--fsdp_config "{\"fsdp_transformer_layer_cls_to_wrap\":\"${REPT_FSDP_AUTO_WRAP_LAYER}\",\"fsdp_offload_params\":false,\"fsdp_sharding_strategy\":\"${REPT_FSDP_SHARDING_STRATEGY}\",\"activation_checkpointing\":${_FSDP_ACT_CKPT}}")
 elif [[ "$REPT_SHARDING_BACKEND" == "deepspeed" ]]; then
     _DS_CFG="${REPT_DEEPSPEED_CONFIG:-${REPT_ROOT}/configs/deepspeed/zero3_2x_h100.json}"
     COMMON_ARGS+=(--deepspeed "$_DS_CFG")
