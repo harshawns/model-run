@@ -20,6 +20,29 @@ wrappers and the patched PT/Env source stay together.
 For a detailed explanation of what was changed in the PT and Env snapshots, see
 [MODIFIED_REASONING_ECONOMICS.md](MODIFIED_REASONING_ECONOMICS.md).
 
+## Current Status
+
+As of the latest 2x H100 Lambda testing:
+
+- `Qwen/Qwen3-4B` episode-mode smokes complete through 6-question, 8-question,
+  and real 10-question runs with `100%` `env_done`.
+- Best completed 10-question smoke so far:
+  - `10/10` questions completed
+  - mean reward `-8.5949 ± 1.2561`
+  - mean completion tokens about `5050`
+- vLLM `max_model_len=8192` is needed for the validated 8-question and
+  10-question smokes.
+- Server-mode vLLM is stable for smoke validation, but on a 2-GPU box it trains
+  on only one GPU. It does not solve optimizer-state OOM for longer runs.
+- Experimental 2-GPU sharding is now wired:
+  - FSDP full-shard is available but currently blocked by a TRL/Torch FSDP
+    assertion during the logprob forward pass.
+  - DeepSpeed ZeRO-3 colocate is the active scaling path for longer
+    10-question training.
+- Rollout debug logging is available and was used to confirm earlier apparent
+  hangs were context, memory, stale-process, or config issues rather than env
+  deadlocks.
+
 ## What This Bundle Depends On
 
 ### Modified PT repo required
@@ -34,6 +57,9 @@ not the upstream trainer. Important changes already in that file:
 - extended episode reward logging plus summary tooling
 - LoRA-capable GRPO path
 - seed-manifest filtering support in the rollout path
+- rollout debug tracing for turn-by-turn episode diagnosis
+- experimental FSDP / DeepSpeed sharding pass-through for 2x H100 scaling
+- automatic `max_steps` calculation for TRL rollout `IterableDataset` training
 
 The bundle also uses:
 
@@ -112,6 +138,19 @@ Do not set `REPT_VLLM_TP=2` on a two-GPU box with this launcher. Server mode
 needs at least one GPU left for training, so `2x H100` should use
 `REPT_VLLM_TP=1`.
 
+Validated 2x H100 server-mode progression:
+
+- `Qwen/Qwen3-1.7B`, 2-question smoke: `100%` completion
+- `Qwen/Qwen3-1.7B`, 4-question smoke: `100%` completion
+- `Qwen/Qwen3-4B`, 4-question smoke: `100%` completion
+- `Qwen/Qwen3-4B`, 6-question smoke: `100%` completion
+- `Qwen/Qwen3-4B`, 8-question smoke with `vLLM max_model_len=8192`: `100%`
+  completion
+- `Qwen/Qwen3-4B`, 10-question smoke: `100%` completion
+
+For longer 10-question training, use the experimental colocate sharding section
+in `2x_h100.lambda.env.example` rather than server mode.
+
 ### Kept for reference only: `Qwen/Qwen3-32B`
 
 Use only if you move to a larger-memory or multi-GPU setup:
@@ -153,6 +192,10 @@ So a single `80 GB` H100 is not where I would try to run `Qwen3-32B` in this rep
   Launches the full training run.
 - [run_2x_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/run_2x_h100_lambda.sh)
   Launches the full two-H100 server-mode training run.
+- [ReasoningEconomicsPT/configs/accelerate/fsdp_2x_h100.yaml](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/configs/accelerate/fsdp_2x_h100.yaml)
+  Experimental FSDP full-shard config for two-H100 colocate runs.
+- [ReasoningEconomicsPT/configs/deepspeed/zero3_2x_h100.json](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/configs/deepspeed/zero3_2x_h100.json)
+  Experimental DeepSpeed ZeRO-3 fallback config for two-H100 colocate runs.
 
 ## Default Assumptions
 
@@ -318,6 +361,66 @@ python scripts/summarize_episode_run.py "$REPT_REWARD_LOG_PATH"
 cat "$(dirname "$REPT_REWARD_LOG_PATH")/episode_summary.md"
 ```
 
+### 2x H100 DeepSpeed Colocate Scaling Path
+
+Use this after the server-mode smokes are passing and you need both H100s for
+training memory. Server mode reserves one GPU for vLLM, so it cannot shard
+optimizer state across both GPUs.
+
+Start with the smallest stable 10-question DeepSpeed colocate smoke:
+
+```bash
+cd /home/ubuntu/csci-544/model-run
+source /home/ubuntu/.venvs/rept-2x-h100/bin/activate
+source ./2x_h100.lambda.env
+
+export REPT_MODEL=Qwen/Qwen3-4B
+export REPT_OUTPUT_DIR=/lambda/nfs/csci-544/rept/runs/grpo_qwen3_4b_REAL10q_ds_n1_g8_b16_256cap_ctx8192_vllm020_2x_h100
+unset REPT_REWARD_LOG_PATH
+unset REPT_ROLLOUT_DEBUG_PATH
+
+export REPT_VLLM_MODE=colocate
+export REPT_COLOCATE_TRAIN_PROCS=2
+export REPT_SHARDING_BACKEND=deepspeed
+export REPT_DEEPSPEED_CONFIG=/home/ubuntu/csci-544/model-run/ReasoningEconomicsPT/configs/deepspeed/zero3_2x_h100.json
+export REPT_VLLM_ENABLE_SLEEP_MODE=1
+
+export REPT_VLLM_GPU_UTIL=0.20
+export REPT_VLLM_MAX_MODEL_LEN=8192
+export REPT_MAX_COMPLETION_LENGTH=256
+export REPT_MAX_TOKENS_PER_STEP=256
+
+export REPT_N_PROMPTS=1
+export REPT_NUM_GENERATIONS=8
+export REPT_BATCH_SIZE=16
+export REPT_GRAD_ACCUM=1
+export REPT_NUM_EPOCHS=1
+export REPT_DEBUG_ROLLOUT=1
+export PYTORCH_ALLOC_CONF=expandable_segments:True
+
+./run_2x_h100_lambda.sh
+```
+
+Important details:
+
+- `REPT_DEEPSPEED_CONFIG` must point to the JSON file, not the
+  `configs/deepspeed/` directory.
+- `REPT_OUTPUT_DIR` should be a full run directory, not just
+  `/lambda/nfs/.../runs/`.
+- If vLLM reports no available KV-cache blocks at `0.20`, retry with
+  `REPT_VLLM_GPU_UTIL=0.25`.
+- Clean stale GPU state before reruns:
+
+```bash
+pkill -f "VLLM::EngineCore" || true
+pkill -f "trl vllm-serve" || true
+pkill -f "training.grpo_train" || true
+pkill -f "accelerate launch" || true
+fuser -k 8001/tcp || true
+sleep 5
+nvidia-smi
+```
+
 ## Running The Env Server
 
 You have two choices.
@@ -464,29 +567,43 @@ Expected training outputs include:
 
 ## Episode Mode Status
 
-- Multi-question episode mode is validated locally (4-question, CPU, Qwen3-0.6B).
-- Full 4-question episodes complete end-to-end: `termination_reason=env_done`, `episode_clipped=False`, `final_questions_remaining=0`.
-- `max_completion_length=1024` is the bundle starting point for 4-question episodes. This is not a proven minimum — GPU runs may need more.
+- Multi-question episode mode is validated locally (4-question, CPU,
+  Qwen3-0.6B).
+- Full 4-question local episodes complete end-to-end:
+  `termination_reason=env_done`, `episode_clipped=False`,
+  `final_questions_remaining=0`.
+- 2x H100 GPU validation now reaches 10-question `Qwen/Qwen3-4B` smokes with
+  `100%` `env_done`.
+- The best completed 10-question GPU smoke so far has mean reward
+  `-8.5949 ± 1.2561` and mean completion tokens about `5050`.
+- `max_completion_length=256` works for the current capped 10-question smoke
+  path; earlier uncapped 8q/10q experiments needed larger completions and
+  `vLLM max_model_len=8192`.
 - Episode-mode eval parity is available: every run produces `reward_log.jsonl`. Summarize with `scripts/summarize_episode_run.py`.
-- GPU/vLLM validation on H100 is the next remaining step.
+- The next remaining GPU task is sharded longer training stability, not basic
+  episode-loop correctness.
 
 ## GPU Sequence Length Tuning
 
-Local CPU validation confirmed `max_completion_length=1024` works for 4-question episodes.
-GPU/vLLM runs may need more headroom because:
-- Answers are longer without a per-step token cap
-- vLLM KV-cache pressure under colocate mode adds constraints
+Local CPU validation confirmed `max_completion_length=1024` works for
+4-question episodes. Current 2x H100 testing shows two different regimes:
 
-Tuning grid (start low, raise if episodes clip or `termination_reason=suffix_too_large` appears):
-- `1024` — validated local starting point
-- `1280`
-- `1536`
+- server-mode smokes can complete 8q/10q when vLLM context is raised to `8192`
+- DeepSpeed colocate runs need a tighter per-step cap first because vLLM and
+  training share both GPUs
+
+Tuning grid for 10-question `Qwen3-4B` colocate runs:
+
+- `256` — current recommended DeepSpeed smoke cap
+- `384`
+- `512`
 
 Set `REPT_MAX_COMPLETION_LENGTH` to control. Use `scripts/summarize_episode_run.py` to check
 `clipped_rate` and `termination_reasons` after each candidate.
 
-> **Memory note:** Local success at 1024 does not guarantee H100 memory safety. vLLM colocate mode
-> dominates memory. If OOM, tune `REPT_VLLM_GPU_UTIL` before raising sequence length.
+> **Memory note:** Server-mode success does not guarantee colocate memory
+> safety. In colocate mode, if vLLM reports no KV-cache blocks, tune
+> `REPT_VLLM_GPU_UTIL` before raising sequence length.
 
 ## First H100 Episode Smoke (Recommended Starting Point)
 
@@ -562,15 +679,43 @@ That usually means:
 - too many completions per group for the hardware
 - or the model is too large for the chosen GPU setup
 
+### DeepSpeed says the config path is a directory
+
+`REPT_DEEPSPEED_CONFIG` must be the JSON file path:
+
+```bash
+export REPT_DEEPSPEED_CONFIG=/home/ubuntu/csci-544/model-run/ReasoningEconomicsPT/configs/deepspeed/zero3_2x_h100.json
+```
+
+This is wrong:
+
+```bash
+export REPT_DEEPSPEED_CONFIG=/home/ubuntu/csci-544/model-run/ReasoningEconomicsPT/configs/deepspeed/
+```
+
+### vLLM says no available memory for cache blocks
+
+In colocate mode, vLLM could load model weights but have no remaining KV-cache
+blocks. Raise the vLLM fraction before reducing context:
+
+```bash
+export REPT_VLLM_GPU_UTIL=0.25
+```
+
+If that still fails, lower `REPT_VLLM_MAX_MODEL_LEN` from `8192` to `7168` for
+the next smoke.
+
 ## Recommended Practical Order
 
 1. source the env file
 2. bootstrap once
 3. preflight
 4. start the env server
-5. scout the 32B model
-6. dry-run the trainer
-7. launch the full run
+5. run the 2x H100 server-mode smoke first
+6. summarize `reward_log.jsonl`
+7. move to DeepSpeed colocate only after the server-mode smoke completes
+8. dry-run the trainer before each new scaling run
+9. launch the full run
 
 ## GPU Memory Guidance
 
