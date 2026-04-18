@@ -59,6 +59,8 @@ usage() {
     echo "  REPT_MAX_TOKENS_PER_STEP  default: REPT_MAX_COMPLETION_LENGTH"
     echo "  REPT_DEFAULT_BUDGET_MODE  default: soft"
     echo "  REPT_REWARD_LOG_PATH  default: <REPT_OUTPUT_DIR>/reward_log.jsonl"
+    echo "  REPT_DEBUG_ROLLOUT    default: 0 (set to 1 for per-turn rollout debug logs)"
+    echo "  REPT_ROLLOUT_DEBUG_PATH default: <REPT_OUTPUT_DIR>/rollout_debug.jsonl"
     exit 1
 }
 
@@ -117,6 +119,8 @@ PYTORCH_WHEEL_INDEX="${PYTORCH_WHEEL_INDEX:-}"
 REPT_MAX_TOKENS_PER_STEP="${REPT_MAX_TOKENS_PER_STEP:-$REPT_MAX_COMPLETION_LENGTH}"
 REPT_DEFAULT_BUDGET_MODE="${REPT_DEFAULT_BUDGET_MODE:-soft}"
 REPT_REWARD_LOG_PATH="${REPT_REWARD_LOG_PATH:-$REPT_OUTPUT_DIR/reward_log.jsonl}"
+REPT_DEBUG_ROLLOUT="${REPT_DEBUG_ROLLOUT:-0}"
+REPT_ROLLOUT_DEBUG_PATH="${REPT_ROLLOUT_DEBUG_PATH:-$REPT_OUTPUT_DIR/rollout_debug.jsonl}"
 
 if [[ -n "${REPT_VLLM_MAX_MODEL_LEN:-}" ]]; then
     if ! [[ "$REPT_VLLM_MAX_MODEL_LEN" =~ ^[0-9]+$ ]] || [[ "$REPT_VLLM_MAX_MODEL_LEN" -lt 1 ]]; then
@@ -238,6 +242,10 @@ echo "  Num generations: $REPT_NUM_GENERATIONS"
 echo "  Prompts/epoch:   $REPT_N_PROMPTS"
 echo "  Grad accum:      $REPT_GRAD_ACCUM"
 echo "  Max episode turns: $REPT_MAX_EPISODE_TURNS"
+echo "  Rollout debug:    $REPT_DEBUG_ROLLOUT"
+if [[ "$REPT_DEBUG_ROLLOUT" == "1" ]]; then
+    echo "  Rollout debug log: $REPT_ROLLOUT_DEBUG_PATH"
+fi
 echo "  Output dir:      $REPT_OUTPUT_DIR"
 echo "  Env URL:         $ENV_BASE_URL"
 if [[ -n "${REPT_VLLM_MAX_MODEL_LEN:-}" ]]; then
@@ -394,6 +402,10 @@ fi
 
 if [[ "${REPT_NO_BF16:-0}" == "1" ]]; then
     COMMON_ARGS+=(--no_bf16)
+fi
+
+if [[ "${REPT_DEBUG_ROLLOUT:-0}" == "1" ]]; then
+    COMMON_ARGS+=(--debug_rollout --rollout_debug_path "$REPT_ROLLOUT_DEBUG_PATH")
 fi
 
 if [[ "$REPT_VLLM_MODE" == "server" ]]; then

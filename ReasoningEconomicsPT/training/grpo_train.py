@@ -5,7 +5,10 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import os
 import threading
+import time
+import traceback
 import warnings
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -41,6 +44,9 @@ RUNTIME_CFG: TrainingRuntimeConfig | None = None
 REWARD_LOG_PATH: str = ""
 EPISODE_LOG_COUNT: int = 0
 LOG_LOCK = threading.Lock()
+ROLLOUT_DEBUG: bool = False
+ROLLOUT_DEBUG_PATH: str = ""
+ROLLOUT_DEBUG_COUNT: int = 0
 
 LOG_PREVIEW_CHARS = 2000
 
@@ -49,6 +55,29 @@ def _truncate_for_log(s: str, max_len: int = LOG_PREVIEW_CHARS) -> str:
     if len(s) <= max_len:
         return s
     return s[:max_len] + "…[truncated]"
+
+
+def _debug_rollout(event: str, **fields: Any) -> None:
+    """Emit opt-in rollout progress logs for diagnosing long episode stalls."""
+    global ROLLOUT_DEBUG_COUNT
+    if not ROLLOUT_DEBUG:
+        return
+
+    entry = {
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "event": event,
+        **fields,
+    }
+    with LOG_LOCK:
+        ROLLOUT_DEBUG_COUNT += 1
+        entry["debug_index"] = ROLLOUT_DEBUG_COUNT
+        line = json.dumps(entry, ensure_ascii=True, sort_keys=True)
+        print(f"[rollout-debug] {line}", flush=True)
+        if ROLLOUT_DEBUG_PATH:
+            path = Path(ROLLOUT_DEBUG_PATH)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as f:
+                f.write(line + "\n")
 
 
 def _parse_completion_for_profile(text: str, profile: ResolvedProfile | None) -> ParsedCompletion:
@@ -361,12 +390,33 @@ def _rollout_one_episode(
     model_profile: ResolvedProfile | None = None,
 ) -> tuple[list[int], list[int], list[float], list[int], float]:
     messages = copy.deepcopy(seed_messages)
+    episode_debug_id = uuid4().hex[:12]
+    _debug_rollout(
+        "episode_enter",
+        episode_debug_id=episode_debug_id,
+        max_episode_turns=max_episode_turns,
+        env_tokenizer_name=env_tokenizer_name,
+        env_total_budget=env_total_budget,
+        trainer_max_completion_length=int(trainer.args.max_completion_length),
+        prompt_message_count=len(messages),
+    )
     with EpisodeSession(
         ENV_BASE_URL,
         tokenizer_name=env_tokenizer_name,
         total_budget=env_total_budget,
     ) as session:
+        reset_t0 = time.monotonic()
         obs = session.reset_episode()
+        _debug_rollout(
+            "episode_reset_done",
+            episode_debug_id=episode_debug_id,
+            episode_id=session.episode_id,
+            elapsed_s=round(time.monotonic() - reset_t0, 3),
+            questions_remaining=obs.get("questions_remaining"),
+            remaining_budget=obs.get("remaining_budget"),
+            budget_per_remaining=obs.get("budget_per_remaining"),
+            question_chars=len(str(obs.get("question", ""))),
+        )
         if not isinstance(messages[-1].get("content"), str):
             raise TypeError(
                 "rollout_func expects last message content to be a string for observation append."
@@ -382,6 +432,13 @@ def _rollout_one_episode(
             add_generation_prompt=True,
         )
         initial_questions_remaining = int(obs.get("questions_remaining", 0))
+        _debug_rollout(
+            "episode_prompt_ready",
+            episode_debug_id=episode_debug_id,
+            episode_id=session.episode_id,
+            prompt_tokens=len(prompt_ids_fixed),
+            initial_questions_remaining=initial_questions_remaining,
+        )
 
         completion_ids: list[int] = []
         env_mask: list[int] = []
@@ -394,6 +451,19 @@ def _rollout_one_episode(
             turns += 1
             obs = session._obs or {}
             step_cap = _step_max_new_tokens(obs, trainer)
+            _debug_rollout(
+                "turn_start",
+                episode_debug_id=episode_debug_id,
+                episode_id=session.episode_id,
+                turn=turns,
+                questions_remaining=obs.get("questions_remaining"),
+                remaining_budget=obs.get("remaining_budget"),
+                tokens_used=obs.get("tokens_used"),
+                step_cap=step_cap,
+                completion_tokens_so_far=int(sum(env_mask)),
+                serialized_tokens_so_far=len(completion_ids),
+                message_count=len(messages),
+            )
             before_ids = _tokenize_messages(
                 tok,
                 messages,
@@ -402,19 +472,58 @@ def _rollout_one_episode(
                 tools=tools,
                 add_generation_prompt=True,
             )
+            _debug_rollout(
+                "turn_prompt_tokenized",
+                episode_debug_id=episode_debug_id,
+                episode_id=session.episode_id,
+                turn=turns,
+                before_prompt_tokens=len(before_ids),
+            )
 
-            with _temporary_vllm_max_tokens(trainer, step_cap):
-                _, gen_ids_batch, logprobs_raw, _ = trainer.vllm_generation.generate(
-                    prompts=[before_ids],
-                    images=None,
-                    num_generations=1,
+            gen_t0 = time.monotonic()
+            try:
+                _debug_rollout(
+                    "turn_generate_start",
+                    episode_debug_id=episode_debug_id,
+                    episode_id=session.episode_id,
+                    turn=turns,
+                    step_cap=step_cap,
+                    before_prompt_tokens=len(before_ids),
                 )
+                with _temporary_vllm_max_tokens(trainer, step_cap):
+                    _, gen_ids_batch, logprobs_raw, _ = trainer.vllm_generation.generate(
+                        prompts=[before_ids],
+                        images=None,
+                        num_generations=1,
+                    )
+            except Exception as exc:
+                _debug_rollout(
+                    "turn_generate_error",
+                    episode_debug_id=episode_debug_id,
+                    episode_id=session.episode_id,
+                    turn=turns,
+                    elapsed_s=round(time.monotonic() - gen_t0, 3),
+                    error_type=type(exc).__name__,
+                    error=str(exc),
+                    traceback=traceback.format_exc(),
+                )
+                raise
             gen_ids = gen_ids_batch[0]
             gen_lp = _squeeze_vllm_logprobs(logprobs_raw)
             if gen_lp is None or len(gen_lp) != len(gen_ids):
                 gen_lp = [0.0] * len(gen_ids)
             step_hit_generation_cap = len(gen_ids) == step_cap
             any_step_hit_generation_cap = any_step_hit_generation_cap or step_hit_generation_cap
+            _debug_rollout(
+                "turn_generate_done",
+                episode_debug_id=episode_debug_id,
+                episode_id=session.episode_id,
+                turn=turns,
+                elapsed_s=round(time.monotonic() - gen_t0, 3),
+                generated_tokens=len(gen_ids),
+                step_cap=step_cap,
+                hit_generation_cap=step_hit_generation_cap,
+            )
 
             completion_ids.extend(gen_ids)
             env_mask.extend([1] * len(gen_ids))
@@ -423,6 +532,16 @@ def _rollout_one_episode(
             text = tok.decode(gen_ids, skip_special_tokens=True)
             messages.append({"role": "assistant", "content": text})
             parsed = _parse_completion_for_profile(text, model_profile)
+            _debug_rollout(
+                "turn_decoded",
+                episode_debug_id=episode_debug_id,
+                episode_id=session.episode_id,
+                turn=turns,
+                response_chars=len(text),
+                visible_chars=len(parsed.visible),
+                reasoning_chars=len(parsed.reasoning),
+                parsed_answer=_truncate_for_log(parsed.answer or "", 200),
+            )
             step_md = _build_env_step_metadata(env_tokenizer_name, model_profile, parsed)
             log_extras: dict[str, Any] | None = None
             if model_profile and model_profile.output_parser:
@@ -441,10 +560,51 @@ def _rollout_one_episode(
                     "remaining_rollout_after_step": int(trainer.args.max_completion_length) - len(completion_ids),
                 }
             )
-            session.apply_response(text, step_metadata=step_md, log_extras=log_extras)
+            step_t0 = time.monotonic()
+            try:
+                _debug_rollout(
+                    "turn_env_step_start",
+                    episode_debug_id=episode_debug_id,
+                    episode_id=session.episode_id,
+                    turn=turns,
+                    response_chars=len(text),
+                    metadata_keys=sorted(step_md.keys()),
+                )
+                session.apply_response(text, step_metadata=step_md, log_extras=log_extras)
+            except Exception as exc:
+                _debug_rollout(
+                    "turn_env_step_error",
+                    episode_debug_id=episode_debug_id,
+                    episode_id=session.episode_id,
+                    turn=turns,
+                    elapsed_s=round(time.monotonic() - step_t0, 3),
+                    error_type=type(exc).__name__,
+                    error=str(exc),
+                    traceback=traceback.format_exc(),
+                )
+                raise
+            _debug_rollout(
+                "turn_env_step_done",
+                episode_debug_id=episode_debug_id,
+                episode_id=session.episode_id,
+                turn=turns,
+                elapsed_s=round(time.monotonic() - step_t0, 3),
+                done=session.done,
+                cumulative_reward=session.reward,
+                questions_remaining=(session._obs or {}).get("questions_remaining"),
+                remaining_budget=(session._obs or {}).get("remaining_budget"),
+                step_logs=len(session.step_logs),
+            )
 
             if session.done:
                 termination_reason = "env_done"
+                _debug_rollout(
+                    "episode_env_done",
+                    episode_debug_id=episode_debug_id,
+                    episode_id=session.episode_id,
+                    turn=turns,
+                    cumulative_reward=session.reward,
+                )
                 break
 
             after_asst_ids = _tokenize_messages(
@@ -470,10 +630,41 @@ def _rollout_one_episode(
             completion_ids.extend(suffix)
             env_mask.extend([0] * len(suffix))
             logprob_seq.extend([0.0] * len(suffix))
+            _debug_rollout(
+                "turn_user_suffix_appended",
+                episode_debug_id=episode_debug_id,
+                episode_id=session.episode_id,
+                turn=turns,
+                after_assistant_tokens=len(after_asst_ids),
+                after_user_tokens=len(after_user_ids),
+                env_suffix_tokens=len(suffix),
+                serialized_tokens_so_far=len(completion_ids),
+            )
+
+        if not session.done and turns >= max_episode_turns:
+            _debug_rollout(
+                "episode_max_turns",
+                episode_debug_id=episode_debug_id,
+                episode_id=session.episode_id,
+                turns=turns,
+                max_episode_turns=max_episode_turns,
+                cumulative_reward=session.reward,
+                questions_remaining=(session._obs or {}).get("questions_remaining"),
+            )
 
         final_observation = session._obs or {}
         final_questions_remaining = int(final_observation.get("questions_remaining", 0))
         questions_completed = max(0, initial_questions_remaining - final_questions_remaining)
+        _debug_rollout(
+            "episode_log_write_start",
+            episode_debug_id=episode_debug_id,
+            episode_id=session.episode_id,
+            termination_reason=termination_reason,
+            questions_completed=questions_completed,
+            final_questions_remaining=final_questions_remaining,
+            total_completion_tokens=int(sum(env_mask)),
+            total_tokens_serialized=len(completion_ids),
+        )
         _write_episode_log(
             {
                 "timestamp_utc": datetime.now(timezone.utc).isoformat(),
@@ -496,6 +687,16 @@ def _rollout_one_episode(
                 "termination_reason": termination_reason,
                 "max_completion_length": int(trainer.args.max_completion_length),
             }
+        )
+        _debug_rollout(
+            "episode_return",
+            episode_debug_id=episode_debug_id,
+            episode_id=session.episode_id,
+            reward=session.reward,
+            prompt_tokens=len(prompt_ids_fixed),
+            completion_tokens=len(completion_ids),
+            env_mask_tokens=int(sum(env_mask)),
+            logprobs=len(logprob_seq),
         )
 
         return prompt_ids_fixed, completion_ids, logprob_seq, env_mask, float(session.reward)
@@ -588,7 +789,7 @@ def reward_from_env(prompts, completions, completion_ids, **kwargs):
 
 
 def main():
-    global ENV_BASE_URL, RUNTIME_CFG, REWARD_LOG_PATH
+    global ENV_BASE_URL, RUNTIME_CFG, REWARD_LOG_PATH, ROLLOUT_DEBUG, ROLLOUT_DEBUG_PATH
 
     parser = argparse.ArgumentParser(description="GRPO training against remote OpenEnv env")
     parser.add_argument("--model", type=str, default="Qwen/Qwen3-0.6B")
@@ -692,6 +893,23 @@ def main():
         choices=["auto", "on", "off"],
         help="Chat-template enable_thinking: auto uses profile JSON; on/off forces True/False.",
     )
+    parser.add_argument(
+        "--debug_rollout",
+        action="store_true",
+        help=(
+            "Print and write JSONL rollout progress events around generation and env steps. "
+            "Also enabled by REPT_DEBUG_ROLLOUT=1."
+        ),
+    )
+    parser.add_argument(
+        "--rollout_debug_path",
+        type=str,
+        default="",
+        help=(
+            "Optional JSONL path for rollout debug events. Defaults to "
+            "<output_dir>/rollout_debug.jsonl when debug is enabled."
+        ),
+    )
     args = parser.parse_args()
 
     if args.per_device_train_batch_size % args.num_generations != 0:
@@ -720,6 +938,11 @@ def main():
     REWARD_LOG_PATH = RUNTIME_CFG.resolved_reward_log_path(args.output_dir)
     if RUNTIME_CFG.log_rewards:
         print(f"Reward episode logs: {REWARD_LOG_PATH} (every {RUNTIME_CFG.log_every_n_steps} episodes)")
+    ROLLOUT_DEBUG = args.debug_rollout or os.environ.get("REPT_DEBUG_ROLLOUT", "0") == "1"
+    debug_path = args.rollout_debug_path or os.environ.get("REPT_ROLLOUT_DEBUG_PATH", "")
+    ROLLOUT_DEBUG_PATH = debug_path or str(Path(args.output_dir) / "rollout_debug.jsonl")
+    if ROLLOUT_DEBUG:
+        print(f"Rollout debug logs: {ROLLOUT_DEBUG_PATH}", flush=True)
 
     profiles_path = Path(args.model_profiles_path) if args.model_profiles_path else None
     profile_registry = load_profiles(profiles_path)
