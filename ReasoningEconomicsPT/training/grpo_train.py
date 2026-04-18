@@ -540,7 +540,7 @@ def _rollout_one_episode(
                 response_chars=len(text),
                 visible_chars=len(parsed.visible),
                 reasoning_chars=len(parsed.reasoning),
-                parsed_answer=_truncate_for_log(parsed.answer or "", 200),
+                visible_preview=_truncate_for_log(parsed.visible, 200),
             )
             step_md = _build_env_step_metadata(env_tokenizer_name, model_profile, parsed)
             log_extras: dict[str, Any] | None = None
