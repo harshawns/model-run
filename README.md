@@ -39,6 +39,12 @@ As of the latest 2x H100 Lambda testing:
     assertion during the logprob forward pass.
   - DeepSpeed ZeRO-3 colocate is the active scaling path for longer
     10-question training.
+- DeepSpeed ZeRO-3 colocate completed a `Qwen/Qwen3-4B`, 10-question,
+  `n_prompts=8`, `num_generations=4`, `batch_size=8`, `128cap` run for `2/2`
+  optimizer steps and saved artifacts.
+- That `128cap` result validates the memory / distributed path, not model
+  improvement yet: `clipped_ratio=1.0`, reward std `0.0`, mean reward `-1.0`,
+  `loss=0.0`, and `grad_norm=0.0`.
 - Rollout debug logging is available and was used to confirm earlier apparent
   hangs were context, memory, stale-process, or config issues rather than env
   deadlocks.
@@ -367,7 +373,7 @@ Use this after the server-mode smokes are passing and you need both H100s for
 training memory. Server mode reserves one GPU for vLLM, so it cannot shard
 optimizer state across both GPUs.
 
-Start with the smallest stable 10-question DeepSpeed colocate smoke:
+Start with the stable 10-question DeepSpeed colocate infrastructure smoke:
 
 ```bash
 cd /home/ubuntu/csci-544/model-run
@@ -375,7 +381,7 @@ source /home/ubuntu/.venvs/rept-2x-h100/bin/activate
 source ./2x_h100.lambda.env
 
 export REPT_MODEL=Qwen/Qwen3-4B
-export REPT_OUTPUT_DIR=/lambda/nfs/csci-544/rept/runs/grpo_qwen3_4b_REAL10q_ds_n1_g8_b16_256cap_ctx8192_vllm020_2x_h100
+export REPT_OUTPUT_DIR=/lambda/nfs/csci-544/rept/runs/grpo_qwen3_4b_REAL10q_ds_n8_g4_b8_128cap_ctx8192_vllm020_2x_h100
 unset REPT_REWARD_LOG_PATH
 unset REPT_ROLLOUT_DEBUG_PATH
 
@@ -387,12 +393,12 @@ export REPT_VLLM_ENABLE_SLEEP_MODE=1
 
 export REPT_VLLM_GPU_UTIL=0.20
 export REPT_VLLM_MAX_MODEL_LEN=8192
-export REPT_MAX_COMPLETION_LENGTH=256
-export REPT_MAX_TOKENS_PER_STEP=256
+export REPT_MAX_COMPLETION_LENGTH=128
+export REPT_MAX_TOKENS_PER_STEP=128
 
-export REPT_N_PROMPTS=1
-export REPT_NUM_GENERATIONS=8
-export REPT_BATCH_SIZE=16
+export REPT_N_PROMPTS=8
+export REPT_NUM_GENERATIONS=4
+export REPT_BATCH_SIZE=8
 export REPT_GRAD_ACCUM=1
 export REPT_NUM_EPOCHS=1
 export REPT_DEBUG_ROLLOUT=1
@@ -409,6 +415,10 @@ Important details:
   `/lambda/nfs/.../runs/`.
 - If vLLM reports no available KV-cache blocks at `0.20`, retry with
   `REPT_VLLM_GPU_UTIL=0.25`.
+- The `128cap` smoke is expected to be memory-stable, but the latest completed
+  run clipped every completion and produced zero reward variance. For the next
+  quality probe, keep the same `g4/b8` geometry and try `160` or `192` before
+  returning to `256`.
 - Clean stale GPU state before reruns:
 
 ```bash
@@ -576,12 +586,12 @@ Expected training outputs include:
   `100%` `env_done`.
 - The best completed 10-question GPU smoke so far has mean reward
   `-8.5949 ± 1.2561` and mean completion tokens about `5050`.
-- `max_completion_length=256` works for the current capped 10-question smoke
-  path; earlier uncapped 8q/10q experiments needed larger completions and
-  `vLLM max_model_len=8192`.
+- DeepSpeed ZeRO-3 colocate now completes `2/2` optimizer steps at
+  `max_completion_length=128`, but that cap clipped every completion and
+  produced no learning signal.
 - Episode-mode eval parity is available: every run produces `reward_log.jsonl`. Summarize with `scripts/summarize_episode_run.py`.
-- The next remaining GPU task is sharded longer training stability, not basic
-  episode-loop correctness.
+- The next remaining GPU task is recovering reward variance and nonzero
+  gradients on the stable sharded path, not basic episode-loop correctness.
 
 ## GPU Sequence Length Tuning
 
@@ -594,12 +604,15 @@ Local CPU validation confirmed `max_completion_length=1024` works for
 
 Tuning grid for 10-question `Qwen3-4B` colocate runs:
 
-- `256` — current recommended DeepSpeed smoke cap
-- `384`
-- `512`
+- `128` — stable infrastructure baseline, but all completions clipped
+- `160`
+- `192`
+- `224`
+- `256` — retry only after smaller caps complete without OOM
 
 Set `REPT_MAX_COMPLETION_LENGTH` to control. Use `scripts/summarize_episode_run.py` to check
-`clipped_rate` and `termination_reasons` after each candidate.
+`clipped_rate`, `termination_reasons`, reward std, and trainer `grad_norm`
+after each candidate.
 
 > **Memory note:** Server-mode success does not guarantee colocate memory
 > safety. In colocate mode, if vLLM reports no KV-cache blocks, tune
