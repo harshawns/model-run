@@ -50,6 +50,7 @@ usage() {
     echo "  REPT_GRADIENT_CHECKPOINTING  default: 1"
     echo "  REPT_MAX_COMPLETION_LENGTH   default: 4096"
     echo "  REPT_MAX_EPISODE_TURNS       default: 256"
+    echo "  REPT_MAX_STEPS       optional: override computed Trainer max_steps"
     echo "  REPT_NO_BF16          default: 0 (set to 1 for --no_bf16)"
     echo "  REPT_ACCELERATE_MAIN_PORT  optional (default: 29500) for accelerate launch"
     echo "  REPT_ALPHA            default: 1.0"
@@ -122,6 +123,7 @@ REPT_VLLM_MODE="${REPT_VLLM_MODE:-auto}"
 REPT_GRADIENT_CHECKPOINTING="${REPT_GRADIENT_CHECKPOINTING:-1}"
 REPT_MAX_COMPLETION_LENGTH="${REPT_MAX_COMPLETION_LENGTH:-4096}"
 REPT_MAX_EPISODE_TURNS="${REPT_MAX_EPISODE_TURNS:-256}"
+REPT_MAX_STEPS="${REPT_MAX_STEPS:-}"
 REPT_NO_BF16="${REPT_NO_BF16:-0}"
 REPT_ALPHA="${REPT_ALPHA:-1.0}"
 REPT_LOG_EVERY="${REPT_LOG_EVERY:-1}"
@@ -150,6 +152,13 @@ fi
 if [[ -n "${REPT_VLLM_MAX_MODEL_LEN:-}" ]]; then
     if ! [[ "$REPT_VLLM_MAX_MODEL_LEN" =~ ^[0-9]+$ ]] || [[ "$REPT_VLLM_MAX_MODEL_LEN" -lt 1 ]]; then
         echo "[ERROR] REPT_VLLM_MAX_MODEL_LEN must be a positive integer (got: $REPT_VLLM_MAX_MODEL_LEN)"
+        exit 1
+    fi
+fi
+
+if [[ -n "$REPT_MAX_STEPS" ]]; then
+    if ! [[ "$REPT_MAX_STEPS" =~ ^[0-9]+$ ]] || [[ "$REPT_MAX_STEPS" -lt 1 ]]; then
+        echo "[ERROR] REPT_MAX_STEPS must be a positive integer when set (got: $REPT_MAX_STEPS)"
         exit 1
     fi
 fi
@@ -205,9 +214,12 @@ if [[ "$REPT_SHARDING_BACKEND" != "none" && "$TRAIN_PROCS" -lt 2 ]]; then
 fi
 
 if [[ "$REPT_SHARDING_BACKEND" != "none" && "$REPT_VLLM_MODE" == "server" ]]; then
-    echo "[WARN] REPT_SHARDING_BACKEND=$REPT_SHARDING_BACKEND with server mode: vLLM reserves one GPU,"
-    echo "  leaving only $TRAIN_PROCS training GPU(s). FSDP/ZeRO will not reduce per-GPU memory on a 2-GPU box."
-    echo "  For sharding to help, use REPT_VLLM_MODE=colocate."
+    echo "[INFO] REPT_SHARDING_BACKEND=$REPT_SHARDING_BACKEND with server mode:"
+    echo "  vLLM reserves $REPT_VLLM_TP GPU(s), leaving $TRAIN_PROCS training GPU(s) for sharding."
+    if [[ "$REPT_NUM_GPUS" -le 2 ]]; then
+        echo "  On a 2-GPU box this does not leave enough ranks for useful train-side sharding."
+        echo "  For 2-GPU sharding, use REPT_VLLM_MODE=colocate."
+    fi
 fi
 
 TARGET_EFFECTIVE_PROMPTS=16
@@ -286,6 +298,9 @@ echo "  Num generations: $REPT_NUM_GENERATIONS"
 echo "  Prompts/epoch:   $REPT_N_PROMPTS"
 echo "  Grad accum:      $REPT_GRAD_ACCUM"
 echo "  Max episode turns: $REPT_MAX_EPISODE_TURNS"
+if [[ -n "$REPT_MAX_STEPS" ]]; then
+    echo "  Max steps override: $REPT_MAX_STEPS"
+fi
 echo "  Rollout debug:    $REPT_DEBUG_ROLLOUT"
 if [[ "$REPT_DEBUG_ROLLOUT" == "1" ]]; then
     echo "  Rollout debug log: $REPT_ROLLOUT_DEBUG_PATH"
@@ -462,8 +477,12 @@ _PROMPTS_PER_STEP=$(( (REPT_BATCH_SIZE / REPT_NUM_GENERATIONS) * TRAIN_PROCS ))
 if [[ "$_PROMPTS_PER_STEP" -lt 1 ]]; then _PROMPTS_PER_STEP=1; fi
 _STEPS_PER_EPOCH=$(( (REPT_N_PROMPTS + _PROMPTS_PER_STEP - 1) / _PROMPTS_PER_STEP ))
 _MAX_STEPS=$(( _STEPS_PER_EPOCH * REPT_NUM_EPOCHS ))
-
-echo "  Training steps: n_prompts=$REPT_N_PROMPTS batch=$REPT_BATCH_SIZE gen=$REPT_NUM_GENERATIONS procs=$TRAIN_PROCS → $_MAX_STEPS"
+if [[ -n "$REPT_MAX_STEPS" ]]; then
+    _MAX_STEPS="$REPT_MAX_STEPS"
+    echo "  Training steps: REPT_MAX_STEPS override → $_MAX_STEPS"
+else
+    echo "  Training steps: n_prompts=$REPT_N_PROMPTS batch=$REPT_BATCH_SIZE gen=$REPT_NUM_GENERATIONS procs=$TRAIN_PROCS → $_MAX_STEPS"
+fi
 COMMON_ARGS+=(--max_steps "$_MAX_STEPS")
 
 if [[ "$REPT_SHARDING_BACKEND" == "fsdp" ]]; then

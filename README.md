@@ -157,6 +157,49 @@ Validated 2x H100 server-mode progression:
 For longer 10-question training, use the experimental colocate sharding section
 in `2x_h100.lambda.env.example` rather than server mode.
 
+### Recommended for `8x A100 40GB SXM4`
+
+Use:
+
+- [8x_a100_40gb.lambda.env.example](/Users/harshawnsingh/Desktop/csci-544/project/model-run/8x_a100_40gb.lambda.env.example)
+
+This profile is for an `8x A100 SXM4` node with `40 GB` VRAM per GPU, `124`
+vCPUs, `1800 GiB` RAM, and `6 TiB` SSD.
+
+Default first-run layout:
+
+- GPUs `0-5`: GRPO training with DeepSpeed ZeRO-3
+- GPUs `6-7`: `trl vllm-serve` with tensor parallel size `2`
+
+Default first-run geometry:
+
+- `REPT_MODEL=Qwen/Qwen3-14B`
+- `REPT_VLLM_MODE=server`
+- `REPT_VLLM_TP=2`
+- `REPT_SHARDING_BACKEND=deepspeed`
+- `REPT_DEEPSPEED_CONFIG=configs/deepspeed/zero3_8x_a100_40gb.json`
+- `REPT_BATCH_SIZE=2`
+- `REPT_NUM_GENERATIONS=2`
+- `REPT_MAX_EPISODE_TURNS=3`
+- `REPT_MAX_STEPS=1`
+- `REPT_VLLM_MAX_MODEL_LEN=5120`
+- `REPT_MAX_COMPLETION_LENGTH=96`
+- `REPT_MAX_TOKENS_PER_STEP=96`
+
+That default is a fit probe, not a training conclusion. After it passes, change
+`REPT_MAX_EPISODE_TURNS=12`, unset `REPT_MAX_STEPS`, and write to a new
+`REPT_OUTPUT_DIR` for the real 10-question run.
+
+Use the A100-specific wrappers:
+
+```bash
+source ./8x_a100_40gb.lambda.env
+bash bootstrap_8x_a100_40gb_lambda.sh
+bash start_openenv_server.sh
+bash preflight_8x_a100_40gb_lambda.sh
+bash run_8x_a100_40gb_lambda.sh 2>&1 | tee /tmp/14b_a100x8_probe.log
+```
+
 ### Kept for reference only: `Qwen/Qwen3-32B`
 
 Use only if you move to a larger-memory or multi-GPU setup:
@@ -180,16 +223,22 @@ So a single `80 GB` H100 is not where I would try to run `Qwen3-32B` in this rep
   Recommended single-H100 env file.
 - [2x_h100.lambda.env.example](/Users/harshawnsingh/Desktop/csci-544/project/model-run/2x_h100.lambda.env.example)
   Recommended two-H100 server-mode env file.
+- [8x_a100_40gb.lambda.env.example](/Users/harshawnsingh/Desktop/csci-544/project/model-run/8x_a100_40gb.lambda.env.example)
+  Recommended eight-A100-40GB server-mode + DeepSpeed env file.
 - [_common.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/_common.sh)
   Shared defaults used by the wrappers.
 - [bootstrap_p5_4xlarge_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/bootstrap_p5_4xlarge_h100_lambda.sh)
   One-time dependency/bootstrap wrapper.
 - [bootstrap_2x_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/bootstrap_2x_h100_lambda.sh)
   Two-H100 bootstrap wrapper alias.
+- [bootstrap_8x_a100_40gb_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/bootstrap_8x_a100_40gb_lambda.sh)
+  Eight-A100 bootstrap wrapper alias.
 - [preflight_p5_4xlarge_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/preflight_p5_4xlarge_h100_lambda.sh)
   Sanity checks before launch.
 - [preflight_2x_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/preflight_2x_h100_lambda.sh)
   Two-H100 sanity checks before launch.
+- [preflight_8x_a100_40gb_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/preflight_8x_a100_40gb_lambda.sh)
+  Eight-A100 sanity checks before launch.
 - [start_openenv_server.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/start_openenv_server.sh)
   Starts the local env server in V1 mode.
 - [scout_p5_4xlarge_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/scout_p5_4xlarge_h100_lambda.sh)
@@ -198,10 +247,14 @@ So a single `80 GB` H100 is not where I would try to run `Qwen3-32B` in this rep
   Launches the full training run.
 - [run_2x_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/run_2x_h100_lambda.sh)
   Launches the full two-H100 server-mode training run.
+- [run_8x_a100_40gb_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/run_8x_a100_40gb_lambda.sh)
+  Launches the eight-A100 server-mode + DeepSpeed training run.
 - [ReasoningEconomicsPT/configs/accelerate/fsdp_2x_h100.yaml](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/configs/accelerate/fsdp_2x_h100.yaml)
   Experimental FSDP full-shard config for two-H100 colocate runs.
 - [ReasoningEconomicsPT/configs/deepspeed/zero3_2x_h100.json](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/configs/deepspeed/zero3_2x_h100.json)
   Experimental DeepSpeed ZeRO-3 fallback config for two-H100 colocate runs.
+- [ReasoningEconomicsPT/configs/deepspeed/zero3_8x_a100_40gb.json](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/configs/deepspeed/zero3_8x_a100_40gb.json)
+  DeepSpeed ZeRO-3 config for eight-A100-40GB training ranks.
 
 ## Default Assumptions
 
