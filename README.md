@@ -5,11 +5,19 @@ OpenEnv GRPO pipeline (episode mode) on a GPU machine with vLLM, with a
 hardware-specific default profile for one AWS `p5.4xlarge`
 (`1x H100`, `80 GB HBM3`).
 
+## Original Group-Project Repositories
+
+This bundle supports runs for the ReasoningEconomics group project. The original
+team repositories are [ReasoningEconomicsEnv](https://github.com/sharma-yash01/ReasoningEconomicsEnv)
+and [ReasoningEconomicsPT](https://github.com/sharma-yash01/ReasoningEconomicsPT).
+The copies below are snapshots from modified forks used for the GPU launch
+workflows in this repository; they may include changes made for those runs.
+
 It now includes copied source snapshots of the modified forks inside this
 folder:
 
-- [ReasoningEconomicsPT](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT)
-- [ReasoningEconomicsEnv](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsEnv)
+- [ReasoningEconomicsPT](./ReasoningEconomicsPT)
+- [ReasoningEconomicsEnv](./ReasoningEconomicsEnv)
 
 These are copied from the modified forks under `my_forks/`, excluding local-only
 artifacts such as `runs/`, venvs, caches, and `__pycache__`.
@@ -54,7 +62,7 @@ As of the latest 2x H100 Lambda testing:
 ### Modified PT repo required
 
 This bundle uses the copied PT snapshot in
-[grpo_train.py](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/training/grpo_train.py),
+[grpo_train.py](./ReasoningEconomicsPT/training/grpo_train.py),
 not the upstream trainer. Important changes already in that file:
 
 - multi-question episode rollout via TRL `rollout_func`
@@ -69,26 +77,26 @@ not the upstream trainer. Important changes already in that file:
 
 The bundle also uses:
 
-- [scout_openenv_seeds.py](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/training/scout_openenv_seeds.py)
-- [run_grpo_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/scripts/run_grpo_lambda.sh)
-- [summarize_episode_run.py](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/scripts/summarize_episode_run.py)
-- [analyze_reward_logs.py](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/scripts/analyze_reward_logs.py)
-- [bootstrap_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/scripts/bootstrap_lambda.sh)
-- [preflight_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/scripts/preflight_lambda.sh)
+- [scout_openenv_seeds.py](./ReasoningEconomicsPT/training/scout_openenv_seeds.py)
+- [run_grpo_lambda.sh](./ReasoningEconomicsPT/scripts/run_grpo_lambda.sh)
+- [summarize_episode_run.py](./ReasoningEconomicsPT/scripts/summarize_episode_run.py)
+- [analyze_reward_logs.py](./ReasoningEconomicsPT/scripts/analyze_reward_logs.py)
+- [bootstrap_lambda.sh](./ReasoningEconomicsPT/scripts/bootstrap_lambda.sh)
+- [preflight_lambda.sh](./ReasoningEconomicsPT/scripts/preflight_lambda.sh)
 
 ### Modified Env repo required
 
 The bundle also expects the copied environment snapshot in
-[ReasoningEconomicsEnv](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsEnv).
+[ReasoningEconomicsEnv](./ReasoningEconomicsEnv).
 Important env-side changes already in place:
 
 - tokenizer-native budget alignment via reset-time `tokenizer_name`
 - optional `grading_response` for hybrid-thinking models such as Qwen3
 - explicit client budget override via `total_budget`
 - server-side config defaults through
-  [config.py](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsEnv/env/config.py)
+  [config.py](./ReasoningEconomicsEnv/env/config.py)
 - deployment support in
-  [server/docker-entrypoint.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsEnv/server/docker-entrypoint.sh)
+  [server/docker-entrypoint.sh](./ReasoningEconomicsEnv/server/docker-entrypoint.sh)
 
 Without those env changes, the reward behavior and diagnostics described in the
 rest of this project will not match.
@@ -99,7 +107,7 @@ rest of this project will not match.
 
 Use:
 
-- [p5_4xlarge_h100.lambda.env.example](/Users/harshawnsingh/Desktop/csci-544/project/model-run/p5_4xlarge_h100.lambda.env.example)
+- [p5_4xlarge_h100.lambda.env.example](./p5_4xlarge_h100.lambda.env.example)
 
 This profile defaults to:
 
@@ -118,7 +126,7 @@ before scaling to `Qwen/Qwen3-14B`.
 
 Use:
 
-- [2x_h100.lambda.env.example](/Users/harshawnsingh/Desktop/csci-544/project/model-run/2x_h100.lambda.env.example)
+- [2x_h100.lambda.env.example](./2x_h100.lambda.env.example)
 
 This profile defaults to a small one-epoch smoke run:
 
@@ -161,7 +169,7 @@ in `2x_h100.lambda.env.example` rather than server mode.
 
 Use:
 
-- [8x_a100_40gb.lambda.env.example](/Users/harshawnsingh/Desktop/csci-544/project/model-run/8x_a100_40gb.lambda.env.example)
+- [8x_a100_40gb.lambda.env.example](./8x_a100_40gb.lambda.env.example)
 
 This profile is for an `8x A100 SXM4` node with `40 GB` VRAM per GPU, `124`
 vCPUs, `1800 GiB` RAM, and `6 TiB` SSD.
@@ -204,7 +212,7 @@ bash run_8x_a100_40gb_lambda.sh 2>&1 | tee /tmp/14b_a100x8_probe.log
 
 Use only if you move to a larger-memory or multi-GPU setup:
 
-- [qwen3_32b_reference.lambda.env.example](/Users/harshawnsingh/Desktop/csci-544/project/model-run/qwen3_32b_reference.lambda.env.example)
+- [qwen3_32b_reference.lambda.env.example](./qwen3_32b_reference.lambda.env.example)
 
 Why it is not the default on `p5.4xlarge`:
 
@@ -217,48 +225,48 @@ So a single `80 GB` H100 is not where I would try to run `Qwen3-32B` in this rep
 
 ## What This Bundle Contains
 
-- [qwen3_32b_reference.lambda.env.example](/Users/harshawnsingh/Desktop/csci-544/project/model-run/qwen3_32b_reference.lambda.env.example)
+- [qwen3_32b_reference.lambda.env.example](./qwen3_32b_reference.lambda.env.example)
   Reference-only env file for a larger-memory or multi-GPU 32B run.
-- [p5_4xlarge_h100.lambda.env.example](/Users/harshawnsingh/Desktop/csci-544/project/model-run/p5_4xlarge_h100.lambda.env.example)
+- [p5_4xlarge_h100.lambda.env.example](./p5_4xlarge_h100.lambda.env.example)
   Recommended single-H100 env file.
-- [2x_h100.lambda.env.example](/Users/harshawnsingh/Desktop/csci-544/project/model-run/2x_h100.lambda.env.example)
+- [2x_h100.lambda.env.example](./2x_h100.lambda.env.example)
   Recommended two-H100 server-mode env file.
-- [8x_a100_40gb.lambda.env.example](/Users/harshawnsingh/Desktop/csci-544/project/model-run/8x_a100_40gb.lambda.env.example)
+- [8x_a100_40gb.lambda.env.example](./8x_a100_40gb.lambda.env.example)
   Recommended eight-A100-40GB server-mode + DeepSpeed env file.
-- [_common.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/_common.sh)
+- [_common.sh](./_common.sh)
   Shared defaults used by the wrappers.
-- [bootstrap_p5_4xlarge_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/bootstrap_p5_4xlarge_h100_lambda.sh)
+- [bootstrap_p5_4xlarge_h100_lambda.sh](./bootstrap_p5_4xlarge_h100_lambda.sh)
   One-time dependency/bootstrap wrapper.
-- [bootstrap_2x_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/bootstrap_2x_h100_lambda.sh)
+- [bootstrap_2x_h100_lambda.sh](./bootstrap_2x_h100_lambda.sh)
   Two-H100 bootstrap wrapper alias.
-- [bootstrap_8x_a100_40gb_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/bootstrap_8x_a100_40gb_lambda.sh)
+- [bootstrap_8x_a100_40gb_lambda.sh](./bootstrap_8x_a100_40gb_lambda.sh)
   Eight-A100 bootstrap wrapper alias.
-- [preflight_p5_4xlarge_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/preflight_p5_4xlarge_h100_lambda.sh)
+- [preflight_p5_4xlarge_h100_lambda.sh](./preflight_p5_4xlarge_h100_lambda.sh)
   Sanity checks before launch.
-- [preflight_2x_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/preflight_2x_h100_lambda.sh)
+- [preflight_2x_h100_lambda.sh](./preflight_2x_h100_lambda.sh)
   Two-H100 sanity checks before launch.
-- [preflight_8x_a100_40gb_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/preflight_8x_a100_40gb_lambda.sh)
+- [preflight_8x_a100_40gb_lambda.sh](./preflight_8x_a100_40gb_lambda.sh)
   Eight-A100 sanity checks before launch.
-- [start_openenv_server.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/start_openenv_server.sh)
+- [start_openenv_server.sh](./start_openenv_server.sh)
   Starts the local env server in V1 mode.
-- [scout_p5_4xlarge_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/scout_p5_4xlarge_h100_lambda.sh)
+- [scout_p5_4xlarge_h100_lambda.sh](./scout_p5_4xlarge_h100_lambda.sh)
   Runs seed scouting for the larger model.
-- [run_p5_4xlarge_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/run_p5_4xlarge_h100_lambda.sh)
+- [run_p5_4xlarge_h100_lambda.sh](./run_p5_4xlarge_h100_lambda.sh)
   Launches the full training run.
-- [run_2x_h100_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/run_2x_h100_lambda.sh)
+- [run_2x_h100_lambda.sh](./run_2x_h100_lambda.sh)
   Launches the full two-H100 server-mode training run.
-- [run_8x_a100_40gb_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/run_8x_a100_40gb_lambda.sh)
+- [run_8x_a100_40gb_lambda.sh](./run_8x_a100_40gb_lambda.sh)
   Launches the eight-A100 server-mode + DeepSpeed training run.
-- [ReasoningEconomicsPT/configs/accelerate/fsdp_2x_h100.yaml](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/configs/accelerate/fsdp_2x_h100.yaml)
+- [ReasoningEconomicsPT/configs/accelerate/fsdp_2x_h100.yaml](./ReasoningEconomicsPT/configs/accelerate/fsdp_2x_h100.yaml)
   Experimental FSDP full-shard config for two-H100 colocate runs.
-- [ReasoningEconomicsPT/configs/deepspeed/zero3_2x_h100.json](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/configs/deepspeed/zero3_2x_h100.json)
+- [ReasoningEconomicsPT/configs/deepspeed/zero3_2x_h100.json](./ReasoningEconomicsPT/configs/deepspeed/zero3_2x_h100.json)
   Experimental DeepSpeed ZeRO-3 fallback config for two-H100 colocate runs.
-- [ReasoningEconomicsPT/configs/deepspeed/zero3_8x_a100_40gb.json](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/configs/deepspeed/zero3_8x_a100_40gb.json)
+- [ReasoningEconomicsPT/configs/deepspeed/zero3_8x_a100_40gb.json](./ReasoningEconomicsPT/configs/deepspeed/zero3_8x_a100_40gb.json)
   DeepSpeed ZeRO-3 config for eight-A100-40GB training ranks.
 
 ## Default Assumptions
 
-The default wrapper profile in [_common.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/_common.sh) is:
+The default wrapper profile in [_common.sh](./_common.sh) is:
 
 - `REPT_PROFILE=p5.4xlarge-single-h100`
 - `REPT_MODEL=Qwen/Qwen3-14B`
@@ -581,7 +589,7 @@ By default this launches:
 - `--vllm_mode colocate`
 
 The wrapper delegates to the PT script
-[run_grpo_lambda.sh](/Users/harshawnsingh/Desktop/csci-544/project/model-run/ReasoningEconomicsPT/scripts/run_grpo_lambda.sh),
+[run_grpo_lambda.sh](./ReasoningEconomicsPT/scripts/run_grpo_lambda.sh),
 so the source of truth is still the PT repo. This folder only packages the
 bundle defaults and launch order.
 
@@ -818,7 +826,7 @@ The PT bootstrap script supports this through:
 
 The easiest path is to start from:
 
-- [gh200.lambda.env.example](/Users/harshawnsingh/Desktop/csci-544/project/model-run/gh200.lambda.env.example)
+- [gh200.lambda.env.example](./gh200.lambda.env.example)
 
 Recommended GH200 flow:
 
