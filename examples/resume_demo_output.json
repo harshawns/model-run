@@ -1,0 +1,306 @@
+{
+  "cases": {
+    "correct": {
+      "done": true,
+      "state": {
+        "budget_remaining_ratio": 0.95,
+        "current_accuracy": 1.0,
+        "episode_id": "fixture-demo",
+        "questions_answered": 2,
+        "spent_budget": 2,
+        "step_count": 2,
+        "total_budget": 40,
+        "total_correct": 2
+      },
+      "steps": [
+        {
+          "observation": {
+            "accuracy_so_far": 1.0,
+            "budget_per_remaining": 39.0,
+            "done": false,
+            "history": [
+              {
+                "question_summary": "Compute 12000 + 345.",
+                "tokens_used": 1,
+                "was_correct": true
+              }
+            ],
+            "metadata": {
+              "budget_ratio": 2.0,
+              "max_tokens": 800,
+              "min_tokens": 1,
+              "num_questions": 2,
+              "problem_type": "fixture"
+            },
+            "question": "Compute 45000 + 678.",
+            "questions_remaining": 1,
+            "remaining_budget": 39.0,
+            "reward": 1.095,
+            "step_idx": 1
+          },
+          "response": "\\boxed{12345}"
+        },
+        {
+          "observation": {
+            "accuracy_so_far": 1.0,
+            "budget_per_remaining": 0.0,
+            "done": true,
+            "history": [
+              {
+                "question_summary": "Compute 12000 + 345.",
+                "tokens_used": 1,
+                "was_correct": true
+              },
+              {
+                "question_summary": "Compute 45000 + 678.",
+                "tokens_used": 1,
+                "was_correct": true
+              }
+            ],
+            "metadata": {
+              "budget_ratio": 2.0,
+              "max_tokens": 800,
+              "min_tokens": 1,
+              "num_questions": 2,
+              "problem_type": null
+            },
+            "question": "",
+            "questions_remaining": 0,
+            "remaining_budget": 38.0,
+            "reward": 1.17,
+            "step_idx": 2
+          },
+          "response": "\\boxed{45678}"
+        }
+      ],
+      "total_correct": 2
+    },
+    "malformed": {
+      "done": true,
+      "state": {
+        "budget_remaining_ratio": 1.0,
+        "current_accuracy": 0.0,
+        "episode_id": "fixture-demo",
+        "questions_answered": 2,
+        "spent_budget": 0,
+        "step_count": 2,
+        "total_budget": 40,
+        "total_correct": 0
+      },
+      "steps": [
+        {
+          "observation": {
+            "accuracy_so_far": 0.0,
+            "budget_per_remaining": 40.0,
+            "done": false,
+            "history": [
+              {
+                "question_summary": "Compute 12000 + 345.",
+                "tokens_used": 0,
+                "was_correct": false
+              }
+            ],
+            "metadata": {
+              "budget_ratio": 2.0,
+              "max_tokens": 800,
+              "min_tokens": 1,
+              "num_questions": 2,
+              "problem_type": "fixture"
+            },
+            "question": "Compute 45000 + 678.",
+            "questions_remaining": 1,
+            "remaining_budget": 40.0,
+            "reward": -0.1,
+            "step_idx": 1
+          },
+          "response": ""
+        },
+        {
+          "observation": {
+            "accuracy_so_far": 0.0,
+            "budget_per_remaining": 0.0,
+            "done": true,
+            "history": [
+              {
+                "question_summary": "Compute 12000 + 345.",
+                "tokens_used": 0,
+                "was_correct": false
+              },
+              {
+                "question_summary": "Compute 45000 + 678.",
+                "tokens_used": 0,
+                "was_correct": false
+              }
+            ],
+            "metadata": {
+              "budget_ratio": 2.0,
+              "max_tokens": 800,
+              "min_tokens": 1,
+              "num_questions": 2,
+              "problem_type": null
+            },
+            "question": "",
+            "questions_remaining": 0,
+            "remaining_budget": 40.0,
+            "reward": -0.1,
+            "step_idx": 2
+          },
+          "response": ""
+        }
+      ],
+      "total_correct": 0
+    },
+    "verifier_error": {
+      "classification_source": "example harness, not environment schema",
+      "error": "injected demo verifier failure",
+      "error_type": "RuntimeError",
+      "recorded_as_scored_answer": false,
+      "reward": null
+    },
+    "wrong": {
+      "done": true,
+      "state": {
+        "budget_remaining_ratio": 0.95,
+        "current_accuracy": 0.0,
+        "episode_id": "fixture-demo",
+        "questions_answered": 2,
+        "spent_budget": 2,
+        "step_count": 2,
+        "total_budget": 40,
+        "total_correct": 0
+      },
+      "steps": [
+        {
+          "observation": {
+            "accuracy_so_far": 0.0,
+            "budget_per_remaining": 39.0,
+            "done": false,
+            "history": [
+              {
+                "question_summary": "Compute 12000 + 345.",
+                "tokens_used": 1,
+                "was_correct": false
+              }
+            ],
+            "metadata": {
+              "budget_ratio": 2.0,
+              "max_tokens": 800,
+              "min_tokens": 1,
+              "num_questions": 2,
+              "problem_type": "fixture"
+            },
+            "question": "Compute 45000 + 678.",
+            "questions_remaining": 1,
+            "remaining_budget": 39.0,
+            "reward": -0.1,
+            "step_idx": 1
+          },
+          "response": "\\boxed{0}"
+        },
+        {
+          "observation": {
+            "accuracy_so_far": 0.0,
+            "budget_per_remaining": 0.0,
+            "done": true,
+            "history": [
+              {
+                "question_summary": "Compute 12000 + 345.",
+                "tokens_used": 1,
+                "was_correct": false
+              },
+              {
+                "question_summary": "Compute 45000 + 678.",
+                "tokens_used": 1,
+                "was_correct": false
+              }
+            ],
+            "metadata": {
+              "budget_ratio": 2.0,
+              "max_tokens": 800,
+              "min_tokens": 1,
+              "num_questions": 2,
+              "problem_type": null
+            },
+            "question": "",
+            "questions_remaining": 0,
+            "remaining_budget": 38.0,
+            "reward": -0.1,
+            "step_idx": 2
+          },
+          "response": "\\boxed{0}"
+        }
+      ],
+      "total_correct": 0
+    }
+  },
+  "fixture_gold_not_in_reset_observation": true,
+  "observations": [
+    {
+      "accuracy_so_far": 0.0,
+      "budget_per_remaining": 20.0,
+      "done": false,
+      "history": [],
+      "metadata": {
+        "budget_ratio": 2.0,
+        "budget_source": "client",
+        "max_tokens": 800,
+        "min_tokens": 1,
+        "num_questions": 2,
+        "problem_type": "fixture",
+        "total_budget": 40
+      },
+      "question": "Compute 12000 + 345.",
+      "questions_remaining": 2,
+      "remaining_budget": 40.0,
+      "reward": 0.0,
+      "step_idx": 0
+    },
+    {
+      "accuracy_so_far": 0.0,
+      "budget_per_remaining": 20.0,
+      "done": false,
+      "history": [],
+      "metadata": {
+        "budget_ratio": 2.0,
+        "budget_source": "client",
+        "max_tokens": 800,
+        "min_tokens": 1,
+        "num_questions": 2,
+        "problem_type": "fixture",
+        "total_budget": 40
+      },
+      "question": "Compute 12000 + 345.",
+      "questions_remaining": 2,
+      "remaining_budget": 40.0,
+      "reward": 0.0,
+      "step_idx": 0
+    },
+    {
+      "accuracy_so_far": 0.0,
+      "budget_per_remaining": 20.0,
+      "done": false,
+      "history": [],
+      "metadata": {
+        "budget_ratio": 2.0,
+        "budget_source": "client",
+        "max_tokens": 800,
+        "min_tokens": 1,
+        "num_questions": 2,
+        "problem_type": "fixture",
+        "total_budget": 40
+      },
+      "question": "Compute 12000 + 345.",
+      "questions_remaining": 2,
+      "remaining_budget": 40.0,
+      "reward": 0.0,
+      "step_idx": 0
+    }
+  ],
+  "scope": "CPU fixture smoke, no model generation, network server or training",
+  "substitutions": [
+    "fixed two-question sampler",
+    "whitespace tokenizer",
+    "scripted responses",
+    "injected verifier exception in one case"
+  ]
+}

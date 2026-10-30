@@ -1,5 +1,13 @@
 # Modified ReasoningEconomics PT and Env Forks
 
+> **Historical note — current snapshot differs.** Read the root README's current
+> ownership notes and runnable example first. In this checkout, `env/reward.py`
+> does not define `compute_reward_components`; malformed and wrong responses do
+> not receive the distinct penalties described below. This document describes
+> earlier intended/modified paths, not a verified specification of the current
+> snapshot. It also does not establish individual authorship of all copied code.
+
+
 This repository is not a copy of the upstream project in its original state.
 It packages two modified source snapshots:
 
